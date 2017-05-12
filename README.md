@@ -1,7 +1,9 @@
 telepath
 --------
 
-An endpoint to receive telemetry destined for Kafka.
+An HTTP endpoint to receive [Influx](https://github.com/influxdata/influxdb) line-protocol metrics destined for [Kafka](http://kafka.apache.org/).
+
+_Note: not ready for production!_
 
 ## example
 
