@@ -59,6 +59,8 @@ func main() {
 				queryHandlerFunc(ctx)
 			case "/write":
 				write.Handle(ctx)
+			case "/metrics":
+				metrics.Handle(ctx)
 			default:
 				ctx.NotFound()
 			}

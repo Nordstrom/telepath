@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/oxtoacart/bpool"
@@ -12,6 +13,7 @@ import (
 
 func pingHandlerFunc(ctx *fasthttp.RequestCtx) {
 	ctx.Response.SetStatusCode(http.StatusNoContent)
+	metrics.PingRequestCount(ctx.Method(), http.StatusNoContent).Inc()
 }
 
 // Deliver a dummy response to the query endpoint, as some InfluxDB
@@ -21,6 +23,8 @@ func queryHandlerFunc(ctx *fasthttp.RequestCtx) {
 	ctx.Response.Header.Set("X-Influxdb-Version", "1.0")
 	ctx.SetStatusCode(http.StatusOK)
 	ctx.SetBody([]byte(`{"results":[]}`))
+
+	metrics.QueryRequestCount(ctx.Method(), http.StatusOK).Inc()
 }
 
 const MaxBodySize = 500 * 1024 * 1024
@@ -70,6 +74,17 @@ func NewWriteHandler(producer sarama.AsyncProducer, config writeConfig) *writeHa
 }
 
 func (wh *writeHandler) Handle(ctx *fasthttp.RequestCtx) {
+	start := time.Now()
+	wh.handlePayload(ctx)
+
+	metrics.WriteRequestTime(ctx.Method(), ctx.Response.StatusCode()).
+		Observe(Microseconds(time.Since(start)))
+	metrics.WriteRequestSize(ctx.Method(), ctx.Response.StatusCode()).
+		Observe(float64(ctx.Request.Header.ContentLength()))
+	metrics.WriteRequestCount(ctx.Method(), ctx.Response.StatusCode()).Inc()
+}
+
+func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 	if !ctx.IsPost() {
 		ctx.SetStatusCode(http.StatusBadRequest)
 		return
@@ -112,6 +127,7 @@ func (wh *writeHandler) Handle(ctx *fasthttp.RequestCtx) {
 	buffer := wh.bufPool.Get()
 	defer wh.bufPool.Put(buffer)
 
+	var payloadSize int64
 	parser := NewLineParser(buffer, "s")
 	for {
 		line, err := parser.Next(reader)
@@ -119,13 +135,23 @@ func (wh *writeHandler) Handle(ctx *fasthttp.RequestCtx) {
 			break
 		}
 
-		//fmt.Printf("Writing to topic %s\n", topic)
+		metrics.InfluxTotalLineCount(db).Inc()
+		if err != nil {
+			metrics.InfluxDroppedLineCount(db).Inc()
+			continue
+		}
 
+		payloadSize = payloadSize + int64(len(line))
+		metrics.InfluxLineLength(db).Observe(float64(len(line)))
+
+		//fmt.Printf("Writing to topic %s\n", topic)
 		wh.producer.Input() <- &sarama.ProducerMessage{
 			Topic: topic,
 			Value: sarama.ByteEncoder(line),
 		}
 	}
 
+	metrics.InfluxPayloadCount(db).Inc()
+	metrics.InfluxPayloadSize(db).Observe(float64(payloadSize))
 	ctx.SetStatusCode(http.StatusNoContent)
 }
