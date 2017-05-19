@@ -80,6 +80,15 @@ func (wh *writeHandler) Handle(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	var db string
+	if param := ctx.QueryArgs().Peek("db"); param != nil {
+		db = string(param)
+	}
+	if db == "" {
+		ctx.SetStatusCode(http.StatusBadRequest)
+		return
+	}
+
 	var reader io.Reader
 	contentEncoding := ctx.Request.Header.Peek("Content-Encoding")
 	if string(contentEncoding) != "gzip" {
@@ -94,7 +103,7 @@ func (wh *writeHandler) Handle(ctx *fasthttp.RequestCtx) {
 		reader = bytes.NewReader(body)
 	}
 
-	topic, err := wh.tf.Format("foo")
+	topic, err := wh.tf.Format(db)
 	if err != nil {
 		ctx.SetStatusCode(http.StatusBadRequest)
 		return

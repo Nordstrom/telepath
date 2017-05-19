@@ -153,12 +153,19 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 		{
 			uri:      "http://foo/write",
 			encoding: "text/plain",
+			label:    "Missing db param",
+			body:     []byte{},
+			lines:    []string{},
+			status:   http.StatusBadRequest,
+		}, {
+			uri:      "http://foo/write?db=test",
+			encoding: "text/plain",
 			label:    "Empty metric payload",
 			body:     []byte{},
 			lines:    []string{},
 			status:   http.StatusNoContent,
 		}, {
-			uri:      "http://foo/write",
+			uri:      "http://foo/write?db=test",
 			encoding: "text/plain",
 			label:    "Single metric",
 			body:     []byte("foo,x=y value=1 1494462271\n"),
@@ -167,7 +174,7 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 			},
 			status: http.StatusNoContent,
 		}, {
-			uri:      "http://foo/write",
+			uri:      "http://foo/write?db=test",
 			encoding: "text/plain",
 			label:    "Multiple metrics",
 			body:     []byte("foo,x=y value=1 1494462271\nbar,x=y value=2 1494462272\n"),
@@ -177,7 +184,7 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 			},
 			status: http.StatusNoContent,
 		}, {
-			uri:      "http://foo/write",
+			uri:      "http://foo/write?db=test",
 			encoding: "gzip",
 			label:    "Gzipped metrics",
 			body:     gzipString("foo,x=y value=1 1494462271\nbar,x=y value=2 1494462272\n"),
