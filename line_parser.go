@@ -22,12 +22,17 @@ func NewLineParser(buffer []byte, precision string) *lineParser {
 	}
 }
 
+func parseComplete(err error) bool {
+	return err != nil && err != io.ErrUnexpectedEOF
+}
+
 func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 	line := emptyBuffer
 	for {
+		var err error
 		if lp.position == 0 {
-			var err error
-			if lp.length, err = reader.Read(lp.buffer[lp.offset:]); err != nil {
+			lp.length, err = io.ReadFull(reader, lp.buffer[lp.offset:])
+			if parseComplete(err) {
 				return emptyBuffer, err
 			}
 		}
@@ -41,6 +46,14 @@ func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 			next := lp.position + tail + 1
 			line = lp.buffer[lp.position : next-1]
 			lp.position = next
+
+			break
+		} else if err == io.ErrUnexpectedEOF {
+			// We're at the end of the line,
+			// and there's no remaining input.
+			tail = lp.offset + lp.length
+			line = lp.buffer[:tail]
+			lp.position = tail
 
 			break
 		} else {
