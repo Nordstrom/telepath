@@ -2,6 +2,7 @@ TARGET   ?= $(shell basename `git rev-parse --show-toplevel`)
 VERSION  ?= $(shell git describe --tags --always )
 BRANCH   ?= $(shell git rev-parse --abbrev-ref HEAD)
 REVISION ?= $(shell git rev-parse HEAD)
+SHORTREV ?= $(shell git rev-parse --short HEAD)
 LD_FLAGS ?= -s \
 	-X github.com/Nordstrom/telepath/version.Name=$(TARGET) \
 	-X github.com/Nordstrom/telepath/version.Revision=$(REVISION) \
@@ -29,6 +30,12 @@ release: test clean
 
 docker/build: release
 	@docker build -t telepath .
+
+docker/push: docker/build
+	@docker tag telepath quay.io/nordstrom/telepath:$(SHORTREV)
+	@docker push quay.io/nordstrom/telepath:$(SHORTREV)
+	@docker tag telepath quay.io/nordstrom/telepath:latest
+	@docker push quay.io/nordstrom/telepath:latest
 
 clean:
 	@rm -rf bin/
