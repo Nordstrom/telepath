@@ -15,9 +15,8 @@ import (
 )
 
 type TelepathConfig struct {
-	TopicFormat string
-	TopicCasing string
-	Brokers     string
+	TopicTemplate string
+	Brokers       string
 }
 
 func main() {
@@ -26,10 +25,8 @@ func main() {
 
 	flag.StringVar(&config.Brokers,
 		"brokers", "", "A comma-separated list of Kafka host:port addrs to connect to")
-	flag.StringVar(&config.TopicFormat,
-		"topic.format", "telepath-metrics", "The Kafka topic name/format to write metrics to")
-	flag.StringVar(&config.TopicCasing,
-		"topic.casing", CasingNone, "The casing to apply to the Kafka topic name/format")
+	flag.StringVar(&config.TopicTemplate,
+		"topic.name", DefaultTopicTemplate, "The Kafka topic name/template to write metrics to")
 	flag.Parse()
 
 	if config.Brokers == "" {
@@ -39,15 +36,19 @@ func main() {
 
 	listener, err := reuseport.Listen("tcp4", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		fmt.Printf("Could not open port: %v", err)
+		fmt.Printf("Could not open port: %v\n", err)
 		return
 	}
 
 	producer := newProducer(strings.Split(config.Brokers, ","))
-	write := NewWriteHandler(producer, writeConfig{
-		topicFormat: config.TopicFormat,
-		topicCasing: config.TopicCasing,
+	write, err := NewWriteHandler(producer, writeConfig{
+		topicTemplate: config.TopicTemplate,
 	})
+
+	if err != nil {
+		fmt.Printf("Could not create handler: %v\n", err)
+		return
+	}
 
 	server := &fasthttp.Server{
 		Name: "Telepath InfluxDB endpoint",

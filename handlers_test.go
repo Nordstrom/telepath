@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/Shopify/sarama"
 	"github.com/Shopify/sarama/mocks"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttputil"
@@ -73,7 +74,7 @@ func Test_write_handler_verb(t *testing.T) {
 	p := mocks.NewAsyncProducer(t, nil)
 	defer p.Close()
 
-	newHandler(listener, NewWriteHandler(p, writeConfig{}).Handle)
+	newWriteHandler(listener, p, writeConfig{})
 	client := newClient(listener)
 
 	verbs := []string{"GET", "PUT", "FOO"}
@@ -101,9 +102,9 @@ func Test_write_handler_payload_too_large(t *testing.T) {
 	p := mocks.NewAsyncProducer(t, nil)
 	defer p.Close()
 
-	newHandler(listener, NewWriteHandler(p, writeConfig{
+	newWriteHandler(listener, p, writeConfig{
 		maxBodySize: 1024,
-	}).Handle)
+	})
 	client := newClient(listener)
 
 	req.SetRequestURI("http://foo/write")
@@ -126,7 +127,7 @@ func Test_write_handler_bogus_gzip_payload(t *testing.T) {
 	p := mocks.NewAsyncProducer(t, nil)
 	defer p.Close()
 
-	newHandler(listener, NewWriteHandler(p, writeConfig{}).Handle)
+	newWriteHandler(listener, p, writeConfig{})
 	client := newClient(listener)
 
 	req.SetRequestURI("http://foo/write")
@@ -218,10 +219,10 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 			})
 		}
 
-		newHandler(listener, NewWriteHandler(p, writeConfig{
-			maxChunkSize: chunkSize,
-			topicFormat:  "telepath-metrics",
-		}).Handle)
+		newWriteHandler(listener, p, writeConfig{
+			maxChunkSize:  chunkSize,
+			topicTemplate: "telepath-metrics",
+		})
 
 		client := newClient(listener)
 
@@ -235,6 +236,11 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 			t.Errorf("%s: expected StatusCode %d, but was %d", c.label, c.status, resp.StatusCode())
 		}
 	}
+}
+
+func newWriteHandler(listener net.Listener, producer sarama.AsyncProducer, config writeConfig) {
+	wh, _ := NewWriteHandler(producer, config)
+	newHandler(listener, wh.Handle)
 }
 
 func newHandler(listener net.Listener, handlerFunc func(*fasthttp.RequestCtx)) {

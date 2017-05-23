@@ -35,7 +35,7 @@ type writeHandler struct {
 	bufPool     *bpool.BytePool
 	maxBodySize int
 	producer    sarama.AsyncProducer
-	tf          *topicFormatter
+	tt          *topicTemplate
 }
 
 type writeConfig struct {
@@ -43,11 +43,10 @@ type writeConfig struct {
 	maxLineSize    int
 	maxChunkSize   int
 	bufferPoolSize int
-	topicFormat    string
-	topicCasing    string
+	topicTemplate  string
 }
 
-func NewWriteHandler(producer sarama.AsyncProducer, config writeConfig) *writeHandler {
+func NewWriteHandler(producer sarama.AsyncProducer, config writeConfig) (*writeHandler, error) {
 	maxBodySize := config.maxBodySize
 	if maxBodySize < 1 {
 		maxBodySize = MaxBodySize
@@ -65,12 +64,17 @@ func NewWriteHandler(producer sarama.AsyncProducer, config writeConfig) *writeHa
 		bufferPoolSize = BufferPoolSize
 	}
 
+	template, err := NewTopicTemplate(config.topicTemplate)
+	if err != nil {
+		return nil, err
+	}
+
 	return &writeHandler{
 		maxBodySize: maxBodySize,
 		bufPool:     bpool.NewBytePool(bufferPoolSize, maxChunkSize),
 		producer:    producer,
-		tf:          NewTopicFormatter(config.topicFormat, config.topicCasing),
-	}
+		tt:          template,
+	}, nil
 }
 
 func (wh *writeHandler) Handle(ctx *fasthttp.RequestCtx) {
@@ -118,7 +122,7 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 		reader = bytes.NewReader(body)
 	}
 
-	topic, err := wh.tf.Format(db)
+	topic, err := wh.tt.Execute(db)
 	if err != nil {
 		ctx.SetStatusCode(http.StatusBadRequest)
 		return
