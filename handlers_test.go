@@ -178,7 +178,7 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 			label:    "Single metric",
 			body:     []byte("foo,x=y value=1 1494462271\n"),
 			lines: []string{
-				"foo,x=y value=1 1494462271&precision=ns",
+				"foo,x=y value=1 1494462271",
 			},
 			status: http.StatusNoContent,
 		}, {
