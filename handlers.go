@@ -108,6 +108,14 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	var precision string
+	if param := ctx.QueryArgs().Peek("db"); param != nil {
+		db = string(param)
+	}
+	if precision == "" {
+		precision = "ns"
+	}
+
 	var reader io.Reader
 	contentEncoding := ctx.Request.Header.Peek("Content-Encoding")
 	if string(contentEncoding) != "gzip" {
@@ -132,7 +140,7 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 	defer wh.bufPool.Put(buffer)
 
 	var payloadSize int64
-	parser := NewLineParser(buffer, "s")
+	parser := NewLineParser(buffer, precision)
 	for {
 		line, err := parser.Next(reader)
 		if err == io.EOF {
