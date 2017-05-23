@@ -109,8 +109,8 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 	}
 
 	var precision string
-	if param := ctx.QueryArgs().Peek("db"); param != nil {
-		db = string(param)
+	if param := ctx.QueryArgs().Peek("precision"); param != nil {
+		precision = string(param)
 	}
 	if precision == "" {
 		precision = "ns"
