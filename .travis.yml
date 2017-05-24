@@ -20,7 +20,7 @@ after_deploy:
 - docker tag telepath quay.io/nordstrom/telepath:$TRAVIS_TAG
 - docker push quay.io/nordstrom/telepath:$TRAVIS_TAG
 - docker tag telepath quay.io/nordstrom/telepath:latest
-- docker push telepath quay.io/nordstrom/telepath:latest
+- docker push quay.io/nordstrom/telepath:latest
 env:
   global:
   - secure: NOTbd68RmcVefdj0sHceAMFIOlxDvqJ89RaJNE/Mg8yA+YcUt3Ja8txw/sIZhFBvhqU2e6ek0GzekWXpTgCwPeKIIQ4bRZwLxMyC6vzHQR7t/n0o9EtlLlt8PMbbarTMGpFLJdFY43OTRIvzun7G/wAEFTjzVs3d95ZY9Axo2i+wZXC2XDJAco9ZumGMCWnnCGDTdshbbuyrUFMWOgumr+rKmmjA22ggAFfnWmGnLtDYgFcrZiOd8w6eFimZ+8BX8wQ0opbaY5etvbfvlXAmsbA9avEQLU76uPEW6XE4iDLbLu2CjbEWZr1/YunQiYFRZlIcmeRtNezYb09nPykBvq0HePz0bqq/ngsTm/iT2mUUOg11hNVroanKkViW0ccL0vTEdmQTYDNFrziFPd/u6leWjKn3gYNkg1bS95+mzaVZ+ojsvf4Q9CDV5kQHoBgGJ1mffYU3xemjCh+R0V1GD0O4UnYlLSv8Il9k2lCJ5Fzw4jRa7zpyl024res9lkRd+EBzvvP3ap+Mzr6tk2KJ2FQEysVr9P+HBzveTiLodCtwdKMSXxTntuqQgcXYVGJ1SPqZixSOefW5nVQXmeDxHNOWiPeWUaom87ccI0lXKEzxd5FdzJi+uBe9m14IQR5sZs1RbVTcesjkP/iMsj5e2jUsNvYKQ7w13pA+ZR6D9gM=
