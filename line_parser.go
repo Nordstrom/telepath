@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"strconv"
+	"time"
 )
 
 var emptyBuffer = []byte{}
@@ -94,15 +95,15 @@ func convertToNanoseconds(input []byte, precision string) ([]byte) {
 	case "s":
 		multiplyer = Second
 	default:
-		return input
-	}
-	time, err := strconv.ParseInt(values[len(values)-1], 10, 64)
-	if (err != nil) {
-		return input
+		multiplyer = Nanosecond
 	}
 
-	values = values[:len(values)-1]
-	values = append(values, strconv.FormatInt(time * multiplyer, 10))
-	converted := strings.Join(values[:]," ")
-	return []byte(converted)
+	t, err := strconv.ParseInt(values[len(values)-1], 10, 64)
+	if err != nil {
+		values = append(values, strconv.FormatInt(time.Now().UnixNano(), 10))
+	} else {
+		values = values[:len(values)-1]
+		values = append(values, strconv.FormatInt(t * multiplyer, 10))
+	}
+	return []byte(strings.Join(values[:], " "))
 }
