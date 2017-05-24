@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"io"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var emptyBuffer = []byte{}
@@ -67,5 +70,31 @@ func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 		}
 	}
 
-	return line, nil
+	return convertToNanoseconds(line, lp.precision), nil
+}
+
+func convertToNanoseconds(input []byte, precision string) []byte {
+	values := strings.Split(string(input[:]), " ")
+	var multiplyer time.Duration
+	switch precision {
+	case "ns":
+		multiplyer = time.Nanosecond
+	case "us":
+		multiplyer = time.Microsecond
+	case "ms":
+		multiplyer = time.Millisecond
+	case "s":
+		multiplyer = time.Second
+	default:
+		multiplyer = time.Nanosecond
+	}
+
+	t, err := strconv.ParseInt(values[len(values)-1], 10, 64)
+	if err != nil {
+		values = append(values, strconv.FormatInt(time.Now().UnixNano(), 10))
+	} else {
+		values = values[:len(values)-1]
+		values = append(values, strconv.FormatInt(t*int64(multiplyer), 10))
+	}
+	return []byte(strings.Join(values[:], " "))
 }
