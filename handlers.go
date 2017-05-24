@@ -1,14 +1,14 @@
 package main
 
 import (
-"bytes"
-"io"
-"net/http"
-"time"
+	"bytes"
+	"io"
+	"net/http"
+	"time"
 
-"github.com/Shopify/sarama"
-"github.com/oxtoacart/bpool"
-"github.com/valyala/fasthttp"
+	"github.com/Shopify/sarama"
+	"github.com/oxtoacart/bpool"
+	"github.com/valyala/fasthttp"
 )
 
 func pingHandlerFunc(ctx *fasthttp.RequestCtx) {

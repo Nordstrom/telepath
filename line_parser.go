@@ -73,29 +73,20 @@ func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 	return convertToNanoseconds(line, lp.precision), nil
 }
 
-const (
-	Nanosecond  int64 = 1
-	Microsecond          = 1000 * Nanosecond
-	Millisecond          = 1000 * Microsecond
-	Second               = 1000 * Millisecond
-	Minute               = 60 * Second
-	Hour                 = 60 * Minute
-)
-
 func convertToNanoseconds(input []byte, precision string) ([]byte) {
 	values := strings.Split(string(input[:]), " ")
-	var multiplyer int64
+	var multiplyer time.Duration
 	switch precision {
 	case "ns":
-		multiplyer = Nanosecond
+		multiplyer = time.Nanosecond
 	case "us":
-		multiplyer = Microsecond
+		multiplyer = time.Microsecond
 	case "ms":
-		multiplyer = Millisecond
+		multiplyer = time.Millisecond
 	case "s":
-		multiplyer = Second
+		multiplyer = time.Second
 	default:
-		multiplyer = Nanosecond
+		multiplyer = time.Nanosecond
 	}
 
 	t, err := strconv.ParseInt(values[len(values)-1], 10, 64)
@@ -103,7 +94,7 @@ func convertToNanoseconds(input []byte, precision string) ([]byte) {
 		values = append(values, strconv.FormatInt(time.Now().UnixNano(), 10))
 	} else {
 		values = values[:len(values)-1]
-		values = append(values, strconv.FormatInt(t * multiplyer, 10))
+		values = append(values, strconv.FormatInt(t * int64(multiplyer), 10))
 	}
 	return []byte(strings.Join(values[:], " "))
 }
