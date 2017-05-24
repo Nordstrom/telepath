@@ -1,14 +1,14 @@
 package main
 
 import (
-	"bytes"
-	"io"
-	"net/http"
-	"time"
+"bytes"
+"io"
+"net/http"
+"time"
 
-	"github.com/Shopify/sarama"
-	"github.com/oxtoacart/bpool"
-	"github.com/valyala/fasthttp"
+"github.com/Shopify/sarama"
+"github.com/oxtoacart/bpool"
+"github.com/valyala/fasthttp"
 )
 
 func pingHandlerFunc(ctx *fasthttp.RequestCtx) {
@@ -108,6 +108,14 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	var precision string
+	if param := ctx.QueryArgs().Peek("precision"); param != nil {
+		precision = string(param)
+	}
+	if precision == "" {
+		precision = "ns"
+	}
+
 	var reader io.Reader
 	contentEncoding := ctx.Request.Header.Peek("Content-Encoding")
 	if string(contentEncoding) != "gzip" {
@@ -132,7 +140,7 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 	defer wh.bufPool.Put(buffer)
 
 	var payloadSize int64
-	parser := NewLineParser(buffer, "s")
+	parser := NewLineParser(buffer, precision)
 	for {
 		line, err := parser.Next(reader)
 		if err == io.EOF {

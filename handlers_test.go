@@ -178,20 +178,50 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 			uri:      "http://foo/write?db=test",
 			encoding: "text/plain",
 			label:    "Multiple metrics",
-			body:     []byte("foo,x=y value=1 1494462271\nbar,x=y value=2 1494462272\n"),
+			body:     []byte("foo,x=y value=1 2494462271\nbar,x=y value=2 2494462272\n"),
 			lines: []string{
-				"foo,x=y value=1 1494462271",
-				"bar,x=y value=2 1494462272",
+				"foo,x=y value=1 2494462271",
+				"bar,x=y value=2 2494462272",
 			},
 			status: http.StatusNoContent,
 		}, {
 			uri:      "http://foo/write?db=test",
 			encoding: "gzip",
 			label:    "Gzipped metrics",
-			body:     gzipString("foo,x=y value=1 1494462271\nbar,x=y value=2 1494462272\n"),
+			body:     gzipString("foo,x=y value=1 3494462271\nbar,x=y value=2 3494462272\n"),
 			lines: []string{
-				"foo,x=y value=1 1494462271",
-				"bar,x=y value=2 1494462272",
+				"foo,x=y value=1 3494462271",
+				"bar,x=y value=2 3494462272",
+			},
+			status: http.StatusNoContent,
+		}, {
+			uri:      "http://foo/write?db=test&precision=us",
+			encoding: "gzip",
+			label:    "Microsecond to Nanosecond",
+			body:     gzipString("foo,x=y value=1 4494462271\nbar,x=y value=2 4494462272\n"),
+			lines: []string{
+				"foo,x=y value=1 4494462271000",
+				"bar,x=y value=2 4494462272000",
+			},
+			status: http.StatusNoContent,
+		}, {
+			uri:      "http://foo/write?db=test&precision=ms",
+			encoding: "gzip",
+			label:    "Millisecond to Nanosecond",
+			body:     gzipString("foo,x=y value=1 5494462271\nbar,x=y value=2 5494462272\n"),
+			lines: []string{
+				"foo,x=y value=1 5494462271000000",
+				"bar,x=y value=2 5494462272000000",
+			},
+			status: http.StatusNoContent,
+		}, {
+			uri:      "http://foo/write?db=test&precision=s",
+			encoding: "gzip",
+			label:    "Second to Nanosecond",
+			body:     gzipString("foo,x=y value=1 6494462271\nbar,x=y value=2 6494462272\n"),
+			lines: []string{
+				"foo,x=y value=1 6494462271000000000",
+				"bar,x=y value=2 6494462272000000000",
 			},
 			status: http.StatusNoContent,
 		},
@@ -203,21 +233,24 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 	p := mocks.NewAsyncProducer(t, nil)
 	defer p.Close()
 
+	expectedStrings := make(map[string]bool)
+
 	for _, c := range cases {
-		var req fasthttp.Request
-		var resp fasthttp.Response
-
-		for _ = range c.lines {
+		for _, line := range c.lines {
+			expectedStrings[line] = true
 			p.ExpectInputWithCheckerFunctionAndSucceed(func(b []byte) error {
-				for _, line := range c.lines {
-					if line == string(b) {
-						return nil
-					}
+				if _, ok := expectedStrings[string(b)]; ok {
+					delete(expectedStrings, string(b))
+					return nil
 				}
-
 				return fmt.Errorf("%s: Found unexpected line '%s'", c.label, string(b))
 			})
 		}
+	}
+
+	for _, c := range cases {
+		var req fasthttp.Request
+		var resp fasthttp.Response
 
 		newWriteHandler(listener, p, writeConfig{
 			maxChunkSize:  chunkSize,
