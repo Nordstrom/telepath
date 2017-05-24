@@ -34,8 +34,6 @@ docker/build: release
 docker/push: docker/build
 	@docker tag telepath quay.io/nordstrom/telepath:$(SHORTREV)
 	@docker push quay.io/nordstrom/telepath:$(SHORTREV)
-	@docker tag telepath quay.io/nordstrom/telepath:latest
-	@docker push quay.io/nordstrom/telepath:latest
 
 clean:
 	@rm -rf bin/

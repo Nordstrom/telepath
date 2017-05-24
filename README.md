@@ -1,6 +1,8 @@
 telepath
 --------
 
+[![Build Status](https://travis-ci.org/Nordstrom/telepath.svg?branch=master)](https://travis-ci.org/Nordstrom/telepath)
+
 An HTTP endpoint to receive [Influx](https://github.com/influxdata/influxdb) line-protocol metrics destined for [Kafka](http://kafka.apache.org/).
 
 _Note: not ready for production!_
