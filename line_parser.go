@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"io"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -47,7 +47,7 @@ func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 		} else if tail != -1 {
 			// We've found a metric!
 			next := lp.position + tail + 1
-			line = lp.buffer[lp.position: next-1]
+			line = lp.buffer[lp.position : next-1]
 			lp.position = next
 
 			break
@@ -73,7 +73,7 @@ func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 	return convertToNanoseconds(line, lp.precision), nil
 }
 
-func convertToNanoseconds(input []byte, precision string) ([]byte) {
+func convertToNanoseconds(input []byte, precision string) []byte {
 	values := strings.Split(string(input[:]), " ")
 	var multiplyer time.Duration
 	switch precision {
@@ -94,7 +94,7 @@ func convertToNanoseconds(input []byte, precision string) ([]byte) {
 		values = append(values, strconv.FormatInt(time.Now().UnixNano(), 10))
 	} else {
 		values = values[:len(values)-1]
-		values = append(values, strconv.FormatInt(t * int64(multiplyer), 10))
+		values = append(values, strconv.FormatInt(t*int64(multiplyer), 10))
 	}
 	return []byte(strings.Join(values[:], " "))
 }

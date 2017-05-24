@@ -2,11 +2,11 @@ package main
 
 import (
 	"bytes"
-	"io"
-	"testing"
 	"github.com/stretchr/testify/require"
-	"strings"
+	"io"
 	"strconv"
+	"strings"
+	"testing"
 	"time"
 )
 
@@ -138,7 +138,7 @@ func Test_should_no_change_timestamp_when_blank_precision(t *testing.T) {
 }
 
 func Test_should_append_time_stamp_if_not_provided(t *testing.T) {
-	expected := []string{ "foo,x=y", "value=1" }
+	expected := []string{"foo,x=y", "value=1"}
 
 	buffer := make([]byte, 32)
 	lp := NewLineParser(buffer, "")
@@ -150,7 +150,7 @@ func Test_should_append_time_stamp_if_not_provided(t *testing.T) {
 	require.Equal(t, expected[0], actualValues[0], "First key value was altered")
 	require.Equal(t, expected[1], actualValues[1], "Second key value was altered")
 	actualTime, err := strconv.ParseInt(actualValues[2], 10, 64)
-	require.True(t, actualTime > time.Now().UnixNano() - int64(time.Millisecond * 2), "Time was not generated within the last 2 milliseconds")
+	require.True(t, actualTime > time.Now().UnixNano()-int64(time.Millisecond*2), "Time was not generated within the last 2 milliseconds")
 	require.NoError(t, err, "Error while parsing time as integer")
 	require.Nil(t, err)
 
