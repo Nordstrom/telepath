@@ -8,6 +8,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/oxtoacart/bpool"
+	log "github.com/sirupsen/logrus"
 	"github.com/valyala/fasthttp"
 )
 
@@ -108,12 +109,9 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	var precision string
+	precision := "ns"
 	if param := ctx.QueryArgs().Peek("precision"); param != nil {
 		precision = string(param)
-	}
-	if precision == "" {
-		precision = "ns"
 	}
 
 	var reader io.Reader
@@ -123,6 +121,7 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 	} else {
 		body, err := ctx.Request.BodyGunzip()
 		if err != nil {
+			log.Debugf("Couldn't gunzip payload for db=%s", db)
 			ctx.SetStatusCode(http.StatusBadRequest)
 			return
 		}
@@ -132,9 +131,12 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 
 	topic, err := wh.tt.Execute(db)
 	if err != nil {
+		log.Debugf("Couldn't build a topic for db=%s", db)
 		ctx.SetStatusCode(http.StatusBadRequest)
 		return
 	}
+
+	log.Debugf("Handling payload for db=%s going to topic: '%s'", db, topic)
 
 	buffer := wh.bufPool.Get()
 	defer wh.bufPool.Put(buffer)
@@ -156,7 +158,7 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 		payloadSize = payloadSize + int64(len(line))
 		metrics.InfluxLineLength(db).Observe(float64(len(line)))
 
-		//fmt.Printf("Writing to topic %s\n", topic)
+		log.Debugf("Writing line for db=%s: '%s'", db, string(line))
 		wh.producer.Input() <- &sarama.ProducerMessage{
 			Topic: topic,
 			Value: sarama.ByteEncoder(line),
