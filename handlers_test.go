@@ -152,32 +152,32 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 		status   int
 	}{
 		{
+			label:    "Missing db param",
 			uri:      "http://foo/write",
 			encoding: "text/plain",
-			label:    "Missing db param",
 			body:     []byte{},
 			lines:    []string{},
 			status:   http.StatusBadRequest,
 		}, {
+			label:    "Empty metric payload",
 			uri:      "http://foo/write?db=test",
 			encoding: "text/plain",
-			label:    "Empty metric payload",
 			body:     []byte{},
 			lines:    []string{},
 			status:   http.StatusNoContent,
 		}, {
+			label:    "Single metric",
 			uri:      "http://foo/write?db=test",
 			encoding: "text/plain",
-			label:    "Single metric",
 			body:     []byte("foo,x=y value=1 1494462271\n"),
 			lines: []string{
 				"foo,x=y value=1 1494462271",
 			},
 			status: http.StatusNoContent,
 		}, {
+			label:    "Multiple metrics",
 			uri:      "http://foo/write?db=test",
 			encoding: "text/plain",
-			label:    "Multiple metrics",
 			body:     []byte("foo,x=y value=1 2494462271\nbar,x=y value=2 2494462272\n"),
 			lines: []string{
 				"foo,x=y value=1 2494462271",
@@ -185,9 +185,9 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 			},
 			status: http.StatusNoContent,
 		}, {
+			label:    "Gzipped metrics",
 			uri:      "http://foo/write?db=test",
 			encoding: "gzip",
-			label:    "Gzipped metrics",
 			body:     gzipString("foo,x=y value=1 3494462271\nbar,x=y value=2 3494462272\n"),
 			lines: []string{
 				"foo,x=y value=1 3494462271",
@@ -195,30 +195,30 @@ func Test_write_handler_metrics_payload(t *testing.T) {
 			},
 			status: http.StatusNoContent,
 		}, {
-			uri:      "http://foo/write?db=test&precision=us",
-			encoding: "gzip",
 			label:    "Microsecond to Nanosecond",
-			body:     gzipString("foo,x=y value=1 4494462271\nbar,x=y value=2 4494462272\n"),
+			uri:      "http://foo/write?db=test&precision=us",
+			encoding: "text/plain",
+			body:     []byte("foo,x=y value=1 4494462271\nbar,x=y value=2 4494462272\n"),
 			lines: []string{
 				"foo,x=y value=1 4494462271000",
 				"bar,x=y value=2 4494462272000",
 			},
 			status: http.StatusNoContent,
 		}, {
-			uri:      "http://foo/write?db=test&precision=ms",
-			encoding: "gzip",
 			label:    "Millisecond to Nanosecond",
-			body:     gzipString("foo,x=y value=1 5494462271\nbar,x=y value=2 5494462272\n"),
+			uri:      "http://foo/write?db=test&precision=ms",
+			encoding: "text/plain",
+			body:     []byte("foo,x=y value=1 5494462271\nbar,x=y value=2 5494462272\n"),
 			lines: []string{
 				"foo,x=y value=1 5494462271000000",
 				"bar,x=y value=2 5494462272000000",
 			},
 			status: http.StatusNoContent,
 		}, {
-			uri:      "http://foo/write?db=test&precision=s",
-			encoding: "gzip",
 			label:    "Second to Nanosecond",
-			body:     gzipString("foo,x=y value=1 6494462271\nbar,x=y value=2 6494462272\n"),
+			uri:      "http://foo/write?db=test&precision=s",
+			encoding: "text/plain",
+			body:     []byte("foo,x=y value=1 6494462271\nbar,x=y value=2 6494462272\n"),
 			lines: []string{
 				"foo,x=y value=1 6494462271000000000",
 				"bar,x=y value=2 6494462272000000000",
