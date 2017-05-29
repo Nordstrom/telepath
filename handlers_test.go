@@ -7,298 +7,266 @@ import (
 	"net"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/Shopify/sarama/mocks"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttputil"
 )
 
 func Test_ping_handler(t *testing.T) {
-	var req fasthttp.Request
-	var resp fasthttp.Response
+	client, teardown := newClient(pingHandlerFunc)
+	defer teardown()
 
-	listener := fasthttputil.NewInmemoryListener()
-	defer listener.Close()
-
-	newHandler(listener, pingHandlerFunc)
-	client := newClient(listener)
-
-	req.SetRequestURI("http://foo/ping")
-	err := client.Do(&req, &resp)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if resp.StatusCode() != 204 {
-		t.Errorf("Expected StatusCode 204, but was %d", resp.StatusCode())
-	}
+	statusCode, _, err := client.Get(nil, "http://foo/ping")
+	assert.NoError(t, err)
+	assert.Equal(t, 204, statusCode)
 }
 
 func Test_query_handler(t *testing.T) {
+	client, teardown := newClient(queryHandlerFunc)
+	defer teardown()
+
 	var req fasthttp.Request
 	var resp fasthttp.Response
 
-	listener := fasthttputil.NewInmemoryListener()
-	defer listener.Close()
-
-	newHandler(listener, queryHandlerFunc)
-	client := newClient(listener)
-
 	req.SetRequestURI("http://foo/query")
 	err := client.Do(&req, &resp)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if resp.StatusCode() != 200 {
-		t.Errorf("Expected StatusCode 200, but was %d", resp.StatusCode())
-	}
 
-	if header := resp.Header.Peek("Content-Type"); string(header) != "application/json" {
-		t.Errorf("Expected Header 'Content-Type: application/json', but was '%v'", string(header))
-	}
-
-	if header := resp.Header.Peek("X-Influxdb-Version"); string(header) != "1.0" {
-		t.Errorf("Expected Header 'X-Influxdb-Version: 1.0', but was '%v'", string(header))
-	}
-
-	body := resp.Body()
-	if string(body) != `{"results":[]}` {
-		t.Errorf("Expected empty result-set; but was '%v'", string(body))
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode())
+	assert.Equal(t, "application/json", string(resp.Header.Peek("Content-Type")))
+	assert.Equal(t, "1.0", string(resp.Header.Peek("X-Influxdb-Version")))
+	assert.Equal(t, `{"results":[]}`, string(resp.Body()))
 }
 
-func Test_write_handler_verb(t *testing.T) {
-	listener := fasthttputil.NewInmemoryListener()
-	defer listener.Close()
-
+func Test_write_handler_verbs(t *testing.T) {
 	p := mocks.NewAsyncProducer(t, nil)
 	defer p.Close()
 
-	newWriteHandler(listener, p, writeConfig{})
-	client := newClient(listener)
+	client, teardown := newClient(makeWriteHandler(p, writeConfig{}))
+	defer teardown()
 
 	verbs := []string{"GET", "PUT", "FOO"}
 	for _, verb := range verbs {
 		var req fasthttp.Request
 		var resp fasthttp.Response
 
-		req.SetRequestURI("http://foo/write")
+		req.SetRequestURI("http://foo/write?db=test")
 		req.Header.SetMethod(verb)
 
 		client.Do(&req, &resp)
-		if resp.StatusCode() != http.StatusBadRequest {
-			t.Errorf("Expected StatusCode 400, but was: %d", resp.StatusCode())
-		}
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode())
 	}
 }
 
-func Test_write_handler_payload_too_large(t *testing.T) {
-	var req fasthttp.Request
-	var resp fasthttp.Response
-
-	listener := fasthttputil.NewInmemoryListener()
-	defer listener.Close()
-
+func Test_write_handler_without_db_param(t *testing.T) {
 	p := mocks.NewAsyncProducer(t, nil)
 	defer p.Close()
 
-	newWriteHandler(listener, p, writeConfig{
-		maxBodySize: 1024,
-	})
-	client := newClient(listener)
+	client, teardown := newClient(makeWriteHandler(p, writeConfig{}))
+	defer teardown()
 
-	req.SetRequestURI("http://foo/write")
-	req.Header.SetMethod("POST")
-	req.SetBody(make([]byte, 1024+1))
-	client.Do(&req, &resp)
+	statusCode, _, err := client.Post(nil, "http://foo/write", nil)
 
-	if resp.StatusCode() != http.StatusRequestEntityTooLarge {
-		t.Errorf("Expected StatusCode 413, but was %d", resp.StatusCode())
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
 
-func Test_write_handler_bogus_gzip_payload(t *testing.T) {
-	var req fasthttp.Request
-	var resp fasthttp.Response
-
-	listener := fasthttputil.NewInmemoryListener()
-	defer listener.Close()
-
+func Test_write_handler_with_empty_payload(t *testing.T) {
 	p := mocks.NewAsyncProducer(t, nil)
 	defer p.Close()
 
-	newWriteHandler(listener, p, writeConfig{})
-	client := newClient(listener)
+	client, teardown := newClient(makeWriteHandler(p, writeConfig{}))
+	defer teardown()
 
-	req.SetRequestURI("http://foo/write")
-	req.Header.SetMethod("POST")
-	req.Header.Add("Content-Encoding", "gzip")
-	req.SetBody([]byte("bogus"))
-	client.Do(&req, &resp)
+	statusCode, _, err := client.Post(nil, "http://foo/write?db=test", nil)
 
-	if resp.StatusCode() != http.StatusBadRequest {
-		t.Errorf("Expected StatusCode 400, but was %d", resp.StatusCode())
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusNoContent, statusCode)
 }
 
-func Test_write_handler_metrics_payload(t *testing.T) {
-	chunkSize := 64
+func Test_write_handler_with_metrics(t *testing.T) {
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+
 	cases := []struct {
-		uri      string
+		url      string
 		encoding string
-		label    string
 		body     []byte
 		lines    []string
-		status   int
 	}{
 		{
-			label:    "Missing db param",
-			uri:      "http://foo/write",
-			encoding: "text/plain",
-			body:     []byte{},
-			lines:    []string{},
-			status:   http.StatusBadRequest,
-		}, {
-			label:    "Empty metric payload",
-			uri:      "http://foo/write?db=test",
-			encoding: "text/plain",
-			body:     []byte{},
-			lines:    []string{},
-			status:   http.StatusNoContent,
-		}, {
-			label:    "Single metric",
-			uri:      "http://foo/write?db=test",
-			encoding: "text/plain",
-			body:     []byte("foo,x=y value=1 1494462271\n"),
+			url:  "http://foo/write?db=test",
+			body: []byte("simple_metric,x=y value=1 1494462271\n"),
 			lines: []string{
-				"foo,x=y value=1 1494462271",
+				"simple_metric,x=y value=1 1494462271",
 			},
-			status: http.StatusNoContent,
-		}, {
-			label:    "Multiple metrics",
-			uri:      "http://foo/write?db=test",
-			encoding: "text/plain",
-			body:     []byte("foo,x=y value=1 2494462271\nbar,x=y value=2 2494462272\n"),
-			lines: []string{
-				"foo,x=y value=1 2494462271",
-				"bar,x=y value=2 2494462272",
-			},
-			status: http.StatusNoContent,
-		}, {
-			label:    "Gzipped metrics",
-			uri:      "http://foo/write?db=test",
+		},
+		{
+			url:      "http://foo/write?db=test",
 			encoding: "gzip",
-			body:     gzipString("foo,x=y value=1 3494462271\nbar,x=y value=2 3494462272\n"),
+			body:     makeGzipString("gzipped_metric,x=y value=1 1494462271\n"),
 			lines: []string{
-				"foo,x=y value=1 3494462271",
-				"bar,x=y value=2 3494462272",
+				"gzipped_metric,x=y value=1 1494462271",
 			},
-			status: http.StatusNoContent,
-		}, {
-			label:    "Microsecond to Nanosecond",
-			uri:      "http://foo/write?db=test&precision=us",
-			encoding: "text/plain",
-			body:     []byte("foo,x=y value=1 4494462271\nbar,x=y value=2 4494462272\n"),
+		},
+		{
+			url:  "http://foo/write?db=test",
+			body: []byte("no_trailing_newline_metric,x=y value=1 1494462271"),
 			lines: []string{
-				"foo,x=y value=1 4494462271000",
-				"bar,x=y value=2 4494462272000",
+				"no_trailing_newline_metric,x=y value=1 1494462271",
 			},
-			status: http.StatusNoContent,
-		}, {
-			label:    "Millisecond to Nanosecond",
-			uri:      "http://foo/write?db=test&precision=ms",
-			encoding: "text/plain",
-			body:     []byte("foo,x=y value=1 5494462271\nbar,x=y value=2 5494462272\n"),
+		},
+		{
+			url:  "http://foo/write?db=test",
+			body: []byte("multiple_metrics,x=y value=1 1494462271\nmultiple_metrics,x=z value=1 1494462271\n"),
 			lines: []string{
-				"foo,x=y value=1 5494462271000000",
-				"bar,x=y value=2 5494462272000000",
+				"multiple_metrics,x=y value=1 1494462271",
+				"multiple_metrics,x=z value=1 1494462271",
 			},
-			status: http.StatusNoContent,
-		}, {
-			label:    "Second to Nanosecond",
-			uri:      "http://foo/write?db=test&precision=s",
-			encoding: "text/plain",
-			body:     []byte("foo,x=y value=1 6494462271\nbar,x=y value=2 6494462272\n"),
+		},
+		{
+			url:  "http://foo/write?db=test&precision=s",
+			body: []byte("upscale_from_seconds_metric,x=y value=1 6494462272\n"),
 			lines: []string{
-				"foo,x=y value=1 6494462271000000000",
-				"bar,x=y value=2 6494462272000000000",
+				"upscale_from_seconds_metric,x=y value=1 6494462272000000000",
 			},
-			status: http.StatusNoContent,
 		},
 	}
 
-	listener := fasthttputil.NewInmemoryListener()
-	defer listener.Close()
-
-	p := mocks.NewAsyncProducer(t, nil)
-	defer p.Close()
-
-	expectedStrings := make(map[string]bool)
-
 	for _, c := range cases {
-		for _, line := range c.lines {
-			expectedStrings[line] = true
-			p.ExpectInputWithCheckerFunctionAndSucceed(func(b []byte) error {
-				if _, ok := expectedStrings[string(b)]; ok {
-					delete(expectedStrings, string(b))
-					return nil
-				}
-				return fmt.Errorf("%s: Found unexpected line '%s'", c.label, string(b))
-			})
+		p := mocks.NewAsyncProducer(t, config)
+		defer p.Close()
+
+		client, teardown := newClient(makeWriteHandler(p, writeConfig{}))
+		defer teardown()
+
+		for _ = range c.lines {
+			p.ExpectInputAndSucceed()
 		}
-	}
 
-	for _, c := range cases {
 		var req fasthttp.Request
 		var resp fasthttp.Response
 
-		newWriteHandler(listener, p, writeConfig{
-			maxChunkSize:  chunkSize,
-			topicTemplate: "telepath-metrics",
-		})
-
-		client := newClient(listener)
-
-		req.SetRequestURI(c.uri)
+		req.SetRequestURI(c.url)
 		req.Header.SetMethod("POST")
 		req.Header.Add("Content-Encoding", c.encoding)
 		req.SetBody(c.body)
-		client.Do(&req, &resp)
+		err := client.Do(&req, &resp)
 
-		if resp.StatusCode() != c.status {
-			t.Errorf("%s: expected StatusCode %d, but was %d", c.label, c.status, resp.StatusCode())
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, resp.StatusCode())
+
+		for _, line := range c.lines {
+			select {
+			case msg := <-p.Successes():
+				metric, _ := msg.Value.Encode()
+				assert.Equal(t, line, string(metric))
+			case <-time.After(time.Second):
+				t.Fatalf("Timeout while waiting for message from channel")
+			}
 		}
 	}
 }
 
-func newWriteHandler(listener net.Listener, producer sarama.AsyncProducer, config writeConfig) {
-	wh, _ := NewWriteHandler(producer, config)
-	newHandler(listener, wh.Handle)
+func Test_write_handler_with_oversized_payload(t *testing.T) {
+	p := mocks.NewAsyncProducer(t, nil)
+	defer p.Close()
+
+	client, teardown := newClient(makeWriteHandler(p, writeConfig{maxBodySize: 1024}))
+	defer teardown()
+
+	var req fasthttp.Request
+	var resp fasthttp.Response
+
+	req.SetRequestURI("http://foo/write?db=test")
+	req.Header.SetMethod("POST")
+	req.Header.Add("Content-Encoding", "text/plain")
+	req.SetBody([]byte(make([]byte, 1024+1)))
+	err := client.Do(&req, &resp)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode())
 }
 
-func newHandler(listener net.Listener, handlerFunc func(*fasthttp.RequestCtx)) {
+func Test_write_handler_with_oversized_metric_line(t *testing.T) {
+	t.Skip("Not implemented")
+	//p := mocks.NewAsyncProducer(t, nil)
+	//defer p.Close()
+
+	//client, teardown := newClient(makeWriteHandler(p, writeConfig{maxLineSize: 32}))
+	//defer teardown()
+
+	//var req fasthttp.Request
+	//var resp fasthttp.Response
+
+	//req.SetRequestURI("http://foo/write?db=test")
+	//req.Header.SetMethod("POST")
+	//req.Header.Add("Content-Encoding", "text/plain")
+	//req.SetBody([]byte("foo,x=y very=1 long=2 metric=3 1494462271"))
+	//err := client.Do(&req, &resp)
+
+	//assert.NoError(t, err)
+	//assert.Equal(t, http.StatusBadRequest, resp.StatusCode())
+}
+
+func Test_write_handler_with_broken_gzip_payload(t *testing.T) {
+	p := mocks.NewAsyncProducer(t, nil)
+	defer p.Close()
+
+	client, teardown := newClient(makeWriteHandler(p, writeConfig{}))
+	defer teardown()
+
+	var req fasthttp.Request
+	var resp fasthttp.Response
+
+	req.SetRequestURI("http://foo/write?db=test")
+	req.Header.SetMethod("POST")
+	req.Header.Add("Content-Encoding", "gzip")
+	req.SetBody([]byte("bogus"))
+	err := client.Do(&req, &resp)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode())
+}
+
+func newClient(handlerFunc func(*fasthttp.RequestCtx)) (*fasthttp.Client, func()) {
 	server := &fasthttp.Server{
 		Handler: handlerFunc,
 		DisableHeaderNamesNormalizing: true,
 	}
 
+	listener := fasthttputil.NewInmemoryListener()
 	go func() {
 		if err := server.Serve(listener); err != nil {
 			fmt.Printf("Unexpected error: %s", err)
 		}
 	}()
-}
 
-func newClient(listener *fasthttputil.InmemoryListener) *fasthttp.Client {
 	return &fasthttp.Client{
-		Dial: func(addr string) (net.Conn, error) {
-			return listener.Dial()
-		},
-		DisableHeaderNamesNormalizing: true,
-	}
+			DisableHeaderNamesNormalizing: true,
+			Dial: func(addr string) (net.Conn, error) {
+				return listener.Dial()
+			},
+		}, func() {
+			listener.Close()
+		}
 }
 
-func gzipString(str string) []byte {
+func makeWriteHandler(producer sarama.AsyncProducer, config writeConfig) func(*fasthttp.RequestCtx) {
+	wh, err := NewWriteHandler(producer, config)
+	if err != nil {
+		panic(err)
+	}
+
+	return wh.Handle
+}
+
+func makeGzipString(str string) []byte {
 	var b bytes.Buffer
 	gz := gzip.NewWriter(&b)
 	if _, err := gz.Write([]byte(str)); err != nil {
