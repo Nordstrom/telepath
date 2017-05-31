@@ -95,7 +95,8 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if ctx.Request.Header.ContentLength() > wh.maxBodySize {
+	contentLength := ctx.Request.Header.ContentLength()
+	if contentLength > wh.maxBodySize {
 		ctx.SetStatusCode(http.StatusRequestEntityTooLarge)
 		return
 	}
@@ -114,14 +115,19 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 		precision = string(param)
 	}
 
+	contentEncoding := "text/plain"
+	if header := ctx.Request.Header.Peek("Content-Encoding"); header != nil {
+		contentEncoding = string(header)
+	}
+
 	var reader io.Reader
-	contentEncoding := ctx.Request.Header.Peek("Content-Encoding")
 	if string(contentEncoding) != "gzip" {
 		reader = bytes.NewReader(ctx.Request.Body())
 	} else {
 		body, err := ctx.Request.BodyGunzip()
 		if err != nil {
-			log.Debugf("Couldn't gunzip payload for db=%s", db)
+			log.WithError(err).WithFields(
+				log.Fields{db: db}).Error("Couldn't gunzip the payload.")
 			ctx.SetStatusCode(http.StatusBadRequest)
 			return
 		}
@@ -131,12 +137,19 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 
 	topic, err := wh.tt.Execute(db)
 	if err != nil {
-		log.Debugf("Couldn't build a topic for db=%s", db)
+		log.WithError(err).WithFields(
+			log.Fields{db: db}).Error("Couldn't build a topic.")
 		ctx.SetStatusCode(http.StatusBadRequest)
 		return
 	}
 
-	log.Debugf("Handling payload for db=%s going to topic: '%s'", db, topic)
+	log.WithFields(log.Fields{
+		"db":              db,
+		"precision":       precision,
+		"topic":           topic,
+		"contentLength":   contentLength,
+		"contentEncoding": contentEncoding,
+	}).Debugf("Handling payload for '%s' database.", db)
 
 	buffer := wh.bufPool.Get()
 	defer wh.bufPool.Put(buffer)
@@ -157,15 +170,20 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 
 		payloadSize = payloadSize + int64(len(line))
 		metrics.InfluxLineLength(db).Observe(float64(len(line)))
+		log.WithFields(log.Fields{
+			"db":        db,
+			"line":      string(line),
+			"precision": precision,
+			"topic":     topic,
+		}).Debugf("Writing a line to the '%s' topic.", topic)
 
-		log.Debugf("Writing line for db=%s: '%s'", db, string(line))
 		wh.producer.Input() <- &sarama.ProducerMessage{
 			Topic: topic,
 			Value: sarama.ByteEncoder(line),
 		}
 	}
 
+	ctx.SetStatusCode(http.StatusNoContent)
 	metrics.InfluxPayloadCount(db).Inc()
 	metrics.InfluxPayloadSize(db).Observe(float64(payloadSize))
-	ctx.SetStatusCode(http.StatusNoContent)
 }
