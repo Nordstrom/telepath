@@ -41,14 +41,14 @@ func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 		}
 
 		tail := bytes.IndexByte(lp.buffer[lp.position:], '\n')
-		if lp.length <= lp.position {
+		if lp.length < lp.position-1 {
 			// We've over-run the usable data in our buffer!
 			return emptyBuffer, io.EOF
 		} else if tail != -1 {
 			// We've found a metric!
-			next := lp.position + tail + 1
-			line = lp.buffer[lp.position : next-1]
-			lp.position = next
+			next := lp.position + tail
+			line = lp.buffer[lp.position:next]
+			lp.position = next + 1
 
 			break
 		} else if err == io.ErrUnexpectedEOF {
