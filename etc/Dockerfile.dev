@@ -1,0 +1,8 @@
+FROM golang
+
+WORKDIR /go/src/telepath
+COPY . .
+RUN make build
+
+EXPOSE 8089
+ENTRYPOINT ["bin/telepath"]
