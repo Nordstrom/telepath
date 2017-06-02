@@ -19,12 +19,16 @@ services:
       KAFKA_ADVERTISED_LISTENERS: plaintext://kafka:9092
       KAFKA_JMX_HOSTNAME: kafka
       KAFKA_JMX_PORT: 9010
+    logging:
+      driver: none
     depends_on: [zookeeper]
 
   jolokia-proxy:
     image: fvigotti/jolokia-proxy
     ports:
     - 8080:8080
+    logging:
+      driver: none
 
   telegraf:
     image: quay.io/nordstrom/telegraf:1.3.0-1
