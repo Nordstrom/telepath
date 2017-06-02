@@ -14,61 +14,94 @@ import (
 
 func Test_line_parser_parsing(t *testing.T) {
 	cases := []struct {
-		label  string
-		input  string
-		expect []string
+		label   string
+		input   string
+		expect  []string
+		bufsize int
 	}{
-		//		{
-		//			label:  "No metrics",
-		//			input:  "",
-		//			expect: []string{},
-		//		},
-		//		{
-		//			label: "Single metric",
-		//			input: "foo value=1 1\n",
-		//			expect: []string{
-		//				"foo value=1 1",
-		//			},
-		//		},
 		{
-			label: "Many metrics",
-			input: "foo,host=Coruscant value=1 1\nfoo,host=Tatooine value=1 1\nfoo,host=Alderaan value=1 1\nfoo,host=Hoth value=1 1\nfoo,host=Naboo value=1 1\nfoo,host=Bespin value=1 1\nfoo,host=Dagobah value=1 1\n",
+			label:   "empty input",
+			bufsize: 32,
+			input:   "",
+			expect:  []string{},
+		},
+		{
+			label:   "input less than buffer size",
+			bufsize: 29,
+			input:   "foo value=1 1\nfoo value=1 2\n",
+			expect: []string{
+				"foo value=1 1",
+				"foo value=1 2",
+			},
+		},
+
+		{
+			label:   "input equal to the buffer size",
+			input:   "foo value=1 1\nfoo value=1 2\n",
+			bufsize: 28,
+			expect: []string{
+				"foo value=1 1",
+				"foo value=1 2",
+			},
+		},
+		{
+			label:   "input more than the buffer size",
+			input:   "foo value=1 1\nfoo value=1 2\n",
+			bufsize: 27,
+			expect: []string{
+				"foo value=1 1",
+				"foo value=1 2",
+			},
+		},
+		{
+			label:   "many metrics",
+			bufsize: 32,
+			input:   "foo,host=Coruscant value=1 1\nfoo,host=Tatooine value=1 1\nfoo,host=Hoth value=1 1\nfoo,host=Alderaan value=1 1\nfoo,host=Naboo value=1 1\nfoo,host=Bespin value=1 1\nfoo,host=Dagobah value=1 1\nfoo,host=Yavin value=1 1\nfoo,host=Geonosis value=1 1\nfoo,host=Mustafar value=1 1\nfoo,host=Ryloth value=1 1\nfoo,host=Endor value=1 1\nfoo,host=Corellia value=1 1\n",
 			expect: []string{
 				"foo,host=Coruscant value=1 1",
 				"foo,host=Tatooine value=1 1",
-				"foo,host=Alderaan value=1 1",
 				"foo,host=Hoth value=1 1",
+				"foo,host=Alderaan value=1 1",
 				"foo,host=Naboo value=1 1",
 				"foo,host=Bespin value=1 1",
 				"foo,host=Dagobah value=1 1",
+				"foo,host=Yavin value=1 1",
+				"foo,host=Geonosis value=1 1",
+				"foo,host=Mustafar value=1 1",
+				"foo,host=Ryloth value=1 1",
+				"foo,host=Endor value=1 1",
+				"foo,host=Corellia value=1 1",
 			},
 		},
-		//		{
-		//			label: "Metric without trailing newline",
-		//			input: "foo value=1 1",
-		//			expect: []string{
-		//				"foo value=1 1",
-		//			},
-		//		},
+		{
+			label:   "no trailing newline",
+			input:   "foo value=1 1",
+			bufsize: 32,
+			expect: []string{
+				"foo value=1 1",
+			},
+		},
 	}
 
 	for _, c := range cases {
-		buffer := make([]byte, 32)
-		lp := NewLineParser(buffer, "")
-		reader := bytes.NewBuffer([]byte(c.input))
+		t.Run(c.label, func(t *testing.T) {
+			buffer := make([]byte, c.bufsize)
+			lp := NewLineParser(buffer, "")
+			reader := bytes.NewBuffer([]byte(c.input))
 
-		actual := make([]string, 0)
-		for {
-			line, err := lp.Next(reader)
-			if err != nil {
-				if err != io.EOF {
-					t.Fatalf("%s: Expected EOF", c.label)
+			actual := make([]string, 0)
+			for {
+				line, err := lp.Next(reader)
+				if err != nil {
+					if err != io.EOF {
+						t.Fatal("Expected EOF")
+					}
+					break
 				}
-				break
+				actual = append(actual, string(line))
 			}
-			actual = append(actual, string(line))
-		}
-		assert.Equal(t, c.expect, actual, c.label)
+			assert.Equal(t, c.expect, actual)
+		})
 	}
 }
 
@@ -80,37 +113,31 @@ func Test_line_parser_upscaling(t *testing.T) {
 		expect    string
 	}{
 		{
-			label:     "Blank precision",
+			label:     "blank precision",
 			precision: "",
 			input:     "foo value=1 1",
 			expect:    "foo value=1 1",
 		},
 		{
-			label:     "Nanoscond precision",
+			label:     "nanoscond precision",
 			precision: "ns",
 			input:     "foo value=1 1",
 			expect:    "foo value=1 1",
 		},
 		{
-			label:     "Microsecond precision",
+			label:     "microsecond precision",
 			precision: "us",
 			input:     "foo value=1 1",
 			expect:    "foo value=1 1000",
 		},
 		{
-			label:     "Millisecond precision",
+			label:     "millisecond precision",
 			precision: "ms",
 			input:     "foo value=1 1",
 			expect:    "foo value=1 1000000",
 		},
 		{
-			label:     "Second precision",
-			precision: "s",
-			input:     "foo value=1 1",
-			expect:    "foo value=1 1000000000",
-		},
-		{
-			label:     "Second precision",
+			label:     "second precision",
 			precision: "s",
 			input:     "foo value=1 1",
 			expect:    "foo value=1 1000000000",
@@ -118,13 +145,15 @@ func Test_line_parser_upscaling(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		buffer := make([]byte, 32)
-		lp := NewLineParser(buffer, c.precision)
-		reader := bytes.NewBuffer([]byte(c.input))
+		t.Run(c.label, func(t *testing.T) {
+			buffer := make([]byte, 32)
+			lp := NewLineParser(buffer, c.precision)
+			reader := bytes.NewBuffer([]byte(c.input))
 
-		actual, err := lp.Next(reader)
-		assert.NoError(t, err)
-		assert.Equal(t, c.expect, string(actual), c.label)
+			actual, err := lp.Next(reader)
+			assert.NoError(t, err)
+			assert.Equal(t, c.expect, string(actual))
+		})
 	}
 }
 

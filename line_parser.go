@@ -12,7 +12,6 @@ var emptyBuffer = []byte{}
 
 type lineParser struct {
 	position  int
-	offset    int
 	length    int
 	precision string
 	buffer    []byte
@@ -30,31 +29,34 @@ func parseComplete(err error) bool {
 }
 
 func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
+	var offset int
+	var length int
 	line := emptyBuffer
 	for {
 		var err error
 		if lp.position == 0 {
-			lp.length, err = io.ReadFull(reader, lp.buffer[lp.offset:])
+			length, err = io.ReadFull(reader, lp.buffer[offset:])
+			lp.length = offset + length
 			if parseComplete(err) {
 				return emptyBuffer, err
 			}
 		}
 
 		tail := bytes.IndexByte(lp.buffer[lp.position:], '\n')
-		if lp.length < lp.position-1 {
+		if lp.length < lp.position {
 			// We've over-run the usable data in our buffer!
 			return emptyBuffer, io.EOF
 		} else if tail != -1 {
 			// We've found a metric!
-			next := lp.position + tail
+			next := lp.position + tail + 1
 			line = lp.buffer[lp.position:next]
-			lp.position = next + 1
+			lp.position = next
 
 			break
 		} else if err == io.ErrUnexpectedEOF {
 			// We're at the end of the line,
 			// and there's no remaining input.
-			tail = lp.offset + lp.length
+			tail = offset + lp.length
 			line = lp.buffer[:tail]
 			lp.position = tail
 
@@ -66,11 +68,19 @@ func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 			copy(lp.buffer, lp.buffer[lp.position:])
 
 			lp.position = 0
-			lp.offset = remainder
+			offset = remainder
 		}
 	}
 
-	return convertToNanoseconds(line, lp.precision), nil
+	return convertToNanoseconds(trimNewline(line), lp.precision), nil
+}
+
+func trimNewline(line []byte) []byte {
+	length := len(line)
+	if c := line[length-1]; c != '\n' {
+		return line
+	}
+	return line[:length-1]
 }
 
 func convertToNanoseconds(input []byte, precision string) []byte {
