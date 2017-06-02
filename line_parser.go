@@ -11,10 +11,10 @@ import (
 var emptyBuffer = []byte{}
 
 type lineParser struct {
-	position  int
-	length    int
-	precision string
-	buffer    []byte
+	linePosition int
+	lineLength   int
+	precision    string
+	buffer       []byte
 }
 
 func NewLineParser(buffer []byte, precision string) *lineParser {
@@ -24,55 +24,63 @@ func NewLineParser(buffer []byte, precision string) *lineParser {
 	}
 }
 
-func parseComplete(err error) bool {
-	return err != nil && err != io.ErrUnexpectedEOF
-}
-
 func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 	var offset int
 	var length int
 	line := emptyBuffer
 	for {
 		var err error
-		if lp.position == 0 {
+		if lp.linePosition == 0 {
+			zeroBuffer(lp.buffer[offset:])
 			length, err = io.ReadFull(reader, lp.buffer[offset:])
-			lp.length = offset + length
 			if parseComplete(err) {
 				return emptyBuffer, err
 			}
+
+			lp.lineLength = offset + length
 		}
 
-		tail := bytes.IndexByte(lp.buffer[lp.position:], '\n')
-		if lp.length < lp.position {
+		tail := bytes.IndexByte(lp.buffer[lp.linePosition:], '\n')
+		if lp.lineLength < lp.linePosition {
 			// We've over-run the usable data in our buffer!
 			return emptyBuffer, io.EOF
 		} else if tail != -1 {
 			// We've found a metric!
-			next := lp.position + tail + 1
-			line = lp.buffer[lp.position:next]
-			lp.position = next
+			next := lp.linePosition + tail + 1
+			line = lp.buffer[lp.linePosition:next]
+			lp.linePosition = next
 
 			break
 		} else if err == io.ErrUnexpectedEOF {
 			// We're at the end of the line,
 			// and there's no remaining input.
-			tail = offset + lp.length
+			tail = offset + lp.lineLength
 			line = lp.buffer[:tail]
-			lp.position = tail
+			lp.linePosition = tail
 
 			break
 		} else {
 			// We'll rotate the remainder of this chunk,
 			// making it available for the next iteration.
-			remainder := len(lp.buffer) - lp.position
-			copy(lp.buffer, lp.buffer[lp.position:])
+			remainder := len(lp.buffer) - lp.linePosition
+			copy(lp.buffer, lp.buffer[lp.linePosition:])
 
-			lp.position = 0
+			lp.linePosition = 0
 			offset = remainder
 		}
 	}
 
 	return convertToNanoseconds(trimNewline(line), lp.precision), nil
+}
+
+func zeroBuffer(buffer []byte) {
+	for i := 0; i < len(buffer); i++ {
+		buffer[i] = 0
+	}
+}
+
+func parseComplete(err error) bool {
+	return err != nil && err != io.ErrUnexpectedEOF
 }
 
 func trimNewline(line []byte) []byte {

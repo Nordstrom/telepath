@@ -56,7 +56,8 @@ func main() {
 	}
 
 	server := &fasthttp.Server{
-		Name: "Telepath InfluxDB endpoint",
+		Name:               "Telepath InfluxDB endpoint",
+		MaxRequestBodySize: MaxBodySize,
 		Handler: func(ctx *fasthttp.RequestCtx) {
 			switch string(ctx.Path()) {
 			case "/ping":

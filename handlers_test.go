@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -87,6 +89,42 @@ func Test_write_handler_with_empty_payload(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusNoContent, statusCode)
+}
+
+func Test_write_handler_sequential_payloads(t *testing.T) {
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+	p := mocks.NewAsyncProducer(t, config)
+	defer p.Close()
+
+	client, teardown := newClient(makeWriteHandler(p, writeConfig{maxChunkSize: 64}))
+	defer teardown()
+
+	for i := 0; i < 1000; i++ {
+		metric := makeMetric()
+		p.ExpectInputAndSucceed()
+
+		var req fasthttp.Request
+		var resp fasthttp.Response
+
+		req.SetRequestURI("http://foo/write?db=test")
+		req.Header.SetMethod("POST")
+		req.Header.Add("Content-Encoding", "text/plain")
+		req.SetBody(metric)
+		err := client.Do(&req, &resp)
+
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNoContent, resp.StatusCode())
+
+		select {
+		case msg := <-p.Successes():
+			actual, _ := msg.Value.Encode()
+			assert.Equal(t, metric, actual)
+
+		case <-time.After(time.Second):
+			t.Fatalf("Timeout while waiting for message from channel")
+		}
+	}
 }
 
 func Test_write_handler_with_metrics(t *testing.T) {
@@ -280,4 +318,26 @@ func makeGzipString(str string) []byte {
 	}
 
 	return b.Bytes()
+}
+
+func makeMetric() []byte {
+	hosts := []string{
+		"Coruscant",
+		"Tatooine",
+		"Hoth",
+		"Alderaan",
+		"Naboo",
+		"Bespin",
+		"Dagobah",
+		"Yavin",
+		"Geonosis",
+		"Mustafar",
+		"Ryloth",
+		"Endor",
+		"Corellia",
+	}
+	now := time.Now().UnixNano()
+	metric := fmt.Sprintf("foo,host=%s value=1 %s",
+		hosts[rand.Intn(len(hosts))], strconv.FormatInt(now, 10))
+	return []byte(metric)
 }

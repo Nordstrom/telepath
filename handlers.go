@@ -30,21 +30,21 @@ func queryHandlerFunc(ctx *fasthttp.RequestCtx) {
 
 const MaxBodySize = 500 * 1024 * 1024
 const MaxLineSize = 64 * 1024
-const BufferPoolSize = 64
+const BytePoolCount = 128
 
 type writeHandler struct {
-	bufPool     *bpool.BytePool
+	bytePool    *bpool.BytePool
 	maxBodySize int
 	producer    sarama.AsyncProducer
 	tt          *topicTemplate
 }
 
 type writeConfig struct {
-	maxBodySize    int
-	maxLineSize    int
-	maxChunkSize   int
-	bufferPoolSize int
-	topicTemplate  string
+	maxBodySize   int
+	maxLineSize   int
+	maxChunkSize  int
+	bytePoolCount int
+	topicTemplate string
 }
 
 func NewWriteHandler(producer sarama.AsyncProducer, config writeConfig) (*writeHandler, error) {
@@ -60,9 +60,9 @@ func NewWriteHandler(producer sarama.AsyncProducer, config writeConfig) (*writeH
 	if maxChunkSize < 1 || maxChunkSize > maxLineSize {
 		maxChunkSize = maxLineSize
 	}
-	bufferPoolSize := config.bufferPoolSize
-	if bufferPoolSize < 1 {
-		bufferPoolSize = BufferPoolSize
+	bytePoolCount := config.bytePoolCount
+	if bytePoolCount < 1 {
+		bytePoolCount = BytePoolCount
 	}
 
 	template, err := NewTopicTemplate(config.topicTemplate)
@@ -72,7 +72,7 @@ func NewWriteHandler(producer sarama.AsyncProducer, config writeConfig) (*writeH
 
 	return &writeHandler{
 		maxBodySize: maxBodySize,
-		bufPool:     bpool.NewBytePool(bufferPoolSize, maxChunkSize),
+		bytePool:    bpool.NewBytePool(bytePoolCount, maxChunkSize),
 		producer:    producer,
 		tt:          template,
 	}, nil
@@ -144,15 +144,15 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 	}
 
 	log.WithFields(log.Fields{
-		"db":              db,
-		"precision":       precision,
-		"topic":           topic,
-		"contentLength":   contentLength,
-		"contentEncoding": contentEncoding,
+		"db":               db,
+		"precision":        precision,
+		"topic":            topic,
+		"content-length":   contentLength,
+		"content-encoding": contentEncoding,
 	}).Debugf("Handling payload for '%s' database.", db)
 
-	buffer := wh.bufPool.Get()
-	defer wh.bufPool.Put(buffer)
+	buffer := wh.bytePool.Get()
+	defer wh.bytePool.Put(buffer)
 
 	var payloadSize int64
 	parser := NewLineParser(buffer, precision)
