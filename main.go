@@ -41,13 +41,22 @@ func main() {
 		log.Fatal("Please specify at least one Kafka broker")
 	}
 
+	kafkaClient, err := newKafkaClient(strings.Split(config.Brokers, ","), time.Minute)
+	if err != nil {
+		log.Fatalf("Could not connect to Kafka brokers: %v", err)
+	}
+
+	kafkaProducer, err := newKafkaProducer(kafkaClient)
+	if err != nil {
+		log.Fatalf("Failed to start Kafka producer: %v", err)
+	}
+
 	listener, err := reuseport.Listen("tcp4", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("Could not open port: %v", err)
 	}
 
-	producer := newProducer(strings.Split(config.Brokers, ","))
-	write, err := NewWriteHandler(producer, writeConfig{
+	write, err := NewWriteHandler(kafkaProducer, writeConfig{
 		topicTemplate: config.TopicTemplate,
 	})
 
@@ -80,19 +89,13 @@ func main() {
 	}
 }
 
-func newProducer(brokers []string) sarama.AsyncProducer {
-	config := sarama.NewConfig()
-
-	config.Producer.RequiredAcks = sarama.WaitForLocal       // Only wait for the leader to ack
-	config.Producer.Compression = sarama.CompressionSnappy   // Compress messages
-	config.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
-
-	producer, err := sarama.NewAsyncProducer(brokers, config)
+func newKafkaProducer(client sarama.Client) (sarama.AsyncProducer, error) {
+	producer, err := sarama.NewAsyncProducerFromClient(client)
 	if err != nil {
-		log.Fatalf("Failed to start Kafka producer: %v", err)
+		return nil, err
 	}
 
-	// We will just log to STDOUT if we're not able to produce messages.
+	// We will log to STDOUT if we're not able to produce messages.
 	// Note: messages will only be returned here after all retry attempts are exhausted.
 	go func() {
 		for err := range producer.Errors() {
@@ -100,5 +103,27 @@ func newProducer(brokers []string) sarama.AsyncProducer {
 		}
 	}()
 
-	return producer
+	return producer, nil
+}
+
+func newKafkaClient(brokers []string, timeout time.Duration) (client sarama.Client, err error) {
+	config := sarama.NewConfig()
+
+	config.Producer.RequiredAcks = sarama.WaitForLocal       // Only wait for the leader to ack
+	config.Producer.Compression = sarama.CompressionSnappy   // Compress messages
+	config.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
+
+	retryTimeout := time.Duration(10 * time.Second)
+	for {
+		client, err = sarama.NewClient(brokers, config)
+		if err == nil {
+			log.Infof("Connected to Kafka: %s", strings.Join(brokers, ","))
+			break
+		}
+
+		log.Errorf("Couldn't connect to Kafka! Trying again in %v. %v", retryTimeout, err)
+		time.Sleep(retryTimeout)
+	}
+
+	return
 }
