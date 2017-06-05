@@ -2,7 +2,11 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"flag"
@@ -46,7 +50,7 @@ func main() {
 		log.Fatalf("Could not connect to Kafka brokers: %v", err)
 	}
 
-	kafkaProducer, err := newKafkaProducer(kafkaClient)
+	kafkaProducer, err := sarama.NewAsyncProducerFromClient(kafkaClient)
 	if err != nil {
 		log.Fatalf("Failed to start Kafka producer: %v", err)
 	}
@@ -83,27 +87,15 @@ func main() {
 		},
 	}
 
+	doneCh := make(chan bool)
+
+	go followProducer(kafkaProducer, doneCh)
+	go handleShutdown(listener, doneCh)
+
 	log.Infof("Starting Telepath server: %v", listener.Addr())
 	if err := server.Serve(listener); err != nil {
 		log.Fatalf("Unexpected error: %v", err)
 	}
-}
-
-func newKafkaProducer(client sarama.Client) (sarama.AsyncProducer, error) {
-	producer, err := sarama.NewAsyncProducerFromClient(client)
-	if err != nil {
-		return nil, err
-	}
-
-	// We will log to STDOUT if we're not able to produce messages.
-	// Note: messages will only be returned here after all retry attempts are exhausted.
-	go func() {
-		for err := range producer.Errors() {
-			log.Errorf("Error processing line: %v", err)
-		}
-	}()
-
-	return producer, nil
 }
 
 func newKafkaClient(brokers []string, timeout time.Duration) (client sarama.Client, err error) {
@@ -112,6 +104,7 @@ func newKafkaClient(brokers []string, timeout time.Duration) (client sarama.Clie
 	config.Producer.RequiredAcks = sarama.WaitForLocal       // Only wait for the leader to ack
 	config.Producer.Compression = sarama.CompressionSnappy   // Compress messages
 	config.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
+	config.Producer.Return.Successes = true
 
 	retryTimeout := time.Duration(10 * time.Second)
 	for {
@@ -126,4 +119,43 @@ func newKafkaClient(brokers []string, timeout time.Duration) (client sarama.Clie
 	}
 
 	return
+}
+
+func handleShutdown(listener net.Listener, doneCh chan bool) {
+	signalCh := make(chan os.Signal)
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	<-signalCh
+	log.Infof("Shutting down...")
+
+	doneCh <- true
+	listener.Close()
+}
+
+func followProducer(producer sarama.AsyncProducer, doneCh chan bool) {
+	for {
+		select {
+		case <-doneCh:
+			return
+
+		case err := <-producer.Errors():
+			msg := err.Msg
+			metrics.KafkaProducerErrorCount(msg.Topic).Inc()
+
+			line, _ := msg.Value.Encode()
+			log.WithFields(log.Fields{
+				"line":  string(line),
+				"topic": msg.Topic,
+			}).Debugf("Unable to produce a line to the '%s' topic: %v", msg.Topic, err.Err)
+
+		case msg := <-producer.Successes():
+			metrics.KafkaProducerSuccessCount(msg.Topic).Inc()
+
+			line, _ := msg.Value.Encode()
+			log.WithFields(log.Fields{
+				"line":  string(line),
+				"topic": msg.Topic,
+			}).Debugf("Produced a line to the '%s' topic.", msg.Topic)
+		}
+	}
 }

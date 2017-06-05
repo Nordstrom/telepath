@@ -29,6 +29,9 @@ type prometheusMetrics struct {
 	influxTotalLineCount   *prometheus.CounterVec
 	influxDroppedLineCount *prometheus.CounterVec
 	influxLineLength       *prometheus.SummaryVec
+
+	kafkaProducerSuccessCount *prometheus.CounterVec
+	kafkaProducerErrorCount *prometheus.CounterVec
 }
 
 var register sync.Once
@@ -77,6 +80,14 @@ func (m *prometheusMetrics) InfluxDroppedLineCount(db string) prometheus.Counter
 
 func (m *prometheusMetrics) InfluxLineLength(db string) prometheus.Summary {
 	return m.influxLineLength.WithLabelValues(db)
+}
+
+func (m *prometheusMetrics) KafkaProducerSuccessCount(topic string) prometheus.Counter {
+	return m.kafkaProducerSuccessCount.WithLabelValues(topic)
+}
+
+func (m *prometheusMetrics) KafkaProducerErrorCount(topic string) prometheus.Counter {
+	return m.kafkaProducerErrorCount.WithLabelValues(topic)
 }
 
 func init() {
@@ -151,6 +162,20 @@ func init() {
 			Name:      "line_length_bytes",
 			Help:      "Size of Influx metric lines in bytes",
 		}, []string{"db"}),
+
+		kafkaProducerSuccessCount: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "telepath",
+			Subsystem: "kafka_producer",
+			Name:      "successes_total",
+			Help:      "Count of successes returned from Kafka producer",
+		}, []string{"topic"}),
+
+		kafkaProducerErrorCount: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "telepath",
+			Subsystem: "kafka_producer",
+			Name:      "errors_total",
+			Help:      "Count of errors returned from Kafka producer",
+		}, []string{"topic"}),
 	}
 
 	register.Do(func() {
@@ -165,5 +190,8 @@ func init() {
 		prometheus.MustRegister(metrics.influxTotalLineCount)
 		prometheus.MustRegister(metrics.influxDroppedLineCount)
 		prometheus.MustRegister(metrics.influxLineLength)
+
+		prometheus.MustRegister(metrics.kafkaProducerSuccessCount)
+		prometheus.MustRegister(metrics.kafkaProducerErrorCount)
 	})
 }

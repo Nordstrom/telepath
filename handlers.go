@@ -170,12 +170,6 @@ func (wh *writeHandler) handlePayload(ctx *fasthttp.RequestCtx) {
 
 		payloadSize = payloadSize + int64(len(line))
 		metrics.InfluxLineLength(db).Observe(float64(len(line)))
-		log.WithFields(log.Fields{
-			"db":        db,
-			"line":      string(line),
-			"precision": precision,
-			"topic":     topic,
-		}).Debugf("Writing a line to the '%s' topic.", topic)
 
 		wh.producer.Input() <- &sarama.ProducerMessage{
 			Topic: topic,
