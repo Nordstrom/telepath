@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -18,24 +17,24 @@ import (
 )
 
 type TelepathConfig struct {
-	TopicTemplate string
 	Brokers       string
+	TopicTemplate string
 	LogLevel      string
 	LogFormat     string
+	HTTPAddr      string
+	HTTPCert      string
+	HTTPKey       string
 }
 
 func main() {
 	config := TelepathConfig{}
-	port := flag.Int("http.port", 8089, "An HTTP port to bind to")
-
-	flag.StringVar(&config.Brokers,
-		"brokers", "", "A comma-separated list of Kafka host:port addrs to connect to")
-	flag.StringVar(&config.TopicTemplate,
-		"topic.name", DefaultTopicTemplate, "The Kafka topic name/template to write metrics to")
-	flag.StringVar(&config.LogLevel,
-		"log.level", log.InfoLevel.String(), "Logging level: debug, info, warning, error")
-	flag.StringVar(&config.LogFormat,
-		"log.format", LogFormatText, "Logging format: text, json")
+	flag.StringVar(&config.Brokers, "brokers", "", "A comma-separated list of Kafka host:port addrs to connect to")
+	flag.StringVar(&config.TopicTemplate, "topic.name", DefaultTopicTemplate, "The Kafka topic name/template to write metrics to")
+	flag.StringVar(&config.HTTPAddr, "http.addr", ":8089", "An HTTP addr to bind to")
+	flag.StringVar(&config.HTTPCert, "http.cert", "", "Path to a TLS certificate file")
+	flag.StringVar(&config.HTTPKey, "http.key", "", "Path to a TLS key file")
+	flag.StringVar(&config.LogLevel, "log.level", log.InfoLevel.String(), "Logging level: debug, info, warning, error")
+	flag.StringVar(&config.LogFormat, "log.format", LogFormatText, "Logging format: text, json")
 	flag.Parse()
 
 	SetLogFormat(config.LogFormat)
@@ -55,7 +54,7 @@ func main() {
 		log.Fatalf("Failed to start Kafka producer: %v", err)
 	}
 
-	listener, err := reuseport.Listen("tcp4", fmt.Sprintf(":%d", *port))
+	listener, err := reuseport.Listen("tcp4", config.HTTPAddr)
 	if err != nil {
 		log.Fatalf("Could not open port: %v", err)
 	}
@@ -91,9 +90,7 @@ func main() {
 
 	go followProducer(kafkaProducer, doneCh)
 	go handleShutdown(listener, doneCh)
-
-	log.Infof("Starting Telepath server: %v", listener.Addr())
-	if err := server.Serve(listener); err != nil {
+	if err := serveRequests(server, listener, config.HTTPCert, config.HTTPKey); err != nil {
 		log.Fatalf("Unexpected error: %v", err)
 	}
 }
@@ -119,6 +116,15 @@ func newKafkaClient(brokers []string, timeout time.Duration) (client sarama.Clie
 	}
 
 	return
+}
+
+func serveRequests(server *fasthttp.Server, listener net.Listener, certFile, keyFile string) error {
+	log.Infof("Starting Telepath server: %v", listener.Addr())
+	if certFile != "" {
+		return server.ServeTLS(listener, certFile, keyFile)
+	} else {
+		return server.Serve(listener)
+	}
 }
 
 func handleShutdown(listener net.Listener, doneCh chan bool) {
