@@ -33,7 +33,7 @@ services:
   telegraf:
     image: quay.io/nordstrom/telegraf:1.3.0-1
     volumes:
-      - ./etc/telegraf.conf:/etc/telegraf/telegraf.conf
+    - ./etc/telegraf.conf:/etc/telegraf/telegraf.conf
 
   telepath:
     build:
@@ -41,9 +41,19 @@ services:
       dockerfile: ./etc/Dockerfile.dev
     ports:
     - 8089:8089
+    - 8090:8090
     command:
     - "-brokers=kafka:9092"
     - "-log.level=debug"
-    restart: on-failure
+    - "-log.format=text"
+    - "-http.addr=:8089"
+    - "-http.enabled=true"
+    - "-https.addr=:8090"
+    - "-https.enabled=true"
+    - "-https.certificate=/var/private/snakeoil.pem"
+    - "-https.key=/var/private/snakeoil-key.pem"
+    volumes:
+    - ./etc/snakeoil.pem:/var/private/snakeoil.pem
+    - ./etc/snakeoil-key.pem:/var/private/snakeoil-key.pem
     depends_on: [kafka]
 
