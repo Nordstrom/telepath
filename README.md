@@ -19,8 +19,7 @@ bin/telepath -broker=localhost:9092
 Post a metric in Influx line-protocol.
 
 ```
-curl -i -XPOST http://localhost:4567/write -d 'foo,host=localhost value=1 1468928660000000000
-'
+curl -i -XPOST http://localhost:8089/write -d 'foo,host=localhost value=1 1468928660000000000'
 ```
 
 ## notes
