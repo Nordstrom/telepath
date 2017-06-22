@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	log "github.com/Sirupsen/logrus"
 	"github.com/oxtoacart/bpool"
-	log "github.com/sirupsen/logrus"
 	"github.com/valyala/fasthttp"
 )
 

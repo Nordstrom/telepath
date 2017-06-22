@@ -53,6 +53,9 @@ services:
     - "-https.enabled=true"
     - "-https.certificate=/var/private/telepath.pem"
     - "-https.key=/var/private/telepath-key.pem"
+    - "-auth.enabled=true"
+    - "-auth.username=writer"
+    - "-auth.password=paperback"
     volumes:
     - ./etc/ca.pem:/var/private/ca.pem
     - ./etc/telepath.pem:/var/private/telepath.pem

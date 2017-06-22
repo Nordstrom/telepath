@@ -31,7 +31,7 @@ type prometheusMetrics struct {
 	influxLineLength       *prometheus.SummaryVec
 
 	kafkaProducerSuccessCount *prometheus.CounterVec
-	kafkaProducerErrorCount *prometheus.CounterVec
+	kafkaProducerErrorCount   *prometheus.CounterVec
 }
 
 var register sync.Once

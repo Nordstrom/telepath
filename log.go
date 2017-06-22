@@ -1,6 +1,6 @@
 package main
 
-import log "github.com/sirupsen/logrus"
+import log "github.com/Sirupsen/logrus"
 
 const LogFormatText = "text"
 const LogFormatJSON = "json"

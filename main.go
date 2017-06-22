@@ -9,8 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Nordstrom/telepath/middleware"
 	"github.com/Shopify/sarama"
-	log "github.com/sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
+	"github.com/buaazp/fasthttprouter"
 	"github.com/valyala/fasthttp"
 )
 
@@ -40,23 +42,17 @@ func main() {
 		log.Fatalf("Could not create a write handler: %v", err)
 	}
 
+	router := fasthttprouter.New()
+	router.GET("/ping", pingHandlerFunc)
+	router.GET("/query", middleware.Auth(queryHandlerFunc, &config.Auth))
+	router.POST("/query", middleware.Auth(queryHandlerFunc, &config.Auth))
+	router.POST("/write", middleware.Auth(write.Handle, &config.Auth))
+	router.GET("/metrics", metrics.Handle)
+
 	server := &fasthttp.Server{
 		Name:               "Telepath InfluxDB endpoint",
 		MaxRequestBodySize: MaxBodySize,
-		Handler: func(ctx *fasthttp.RequestCtx) {
-			switch string(ctx.Path()) {
-			case "/ping":
-				pingHandlerFunc(ctx)
-			case "/query":
-				queryHandlerFunc(ctx)
-			case "/write":
-				write.Handle(ctx)
-			case "/metrics":
-				metrics.Handle(ctx)
-			default:
-				ctx.NotFound()
-			}
-		},
+		Handler:            router.Handler,
 	}
 
 	doneCh := make(chan bool)

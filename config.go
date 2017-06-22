@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/Nordstrom/telepath/middleware"
+	log "github.com/Sirupsen/logrus"
 )
 
 type TelepathConfig struct {
@@ -13,6 +14,7 @@ type TelepathConfig struct {
 	LogFormat     string
 	HTTP          HTTPConfig
 	HTTPS         HTTPSConfig
+	Auth          middleware.AuthConfig
 }
 
 type HTTPConfig struct {
@@ -38,6 +40,10 @@ func (c *TelepathConfig) Parse() {
 	flag.BoolVar(&c.HTTPS.Enabled, "https.enabled", false, "Listen to HTTP addr, if true")
 	flag.StringVar(&c.HTTPS.CertificatePath, "https.certificate", "", "Path to a TLS certificate file")
 	flag.StringVar(&c.HTTPS.KeyPath, "https.key", "", "Path to a TLS key file")
+
+	flag.BoolVar(&c.Auth.Enabled, "auth.enabled", false, "Authenticate user, if true")
+	flag.StringVar(&c.Auth.Username, "auth.username", "", "Name of authenticated user")
+	flag.StringVar(&c.Auth.Password, "auth.password", "", "Password of authenticated user")
 
 	flag.StringVar(&c.LogLevel, "log.level", log.InfoLevel.String(), "Logging level: debug, info, warning, error")
 	flag.StringVar(&c.LogFormat, "log.format", LogFormatText, "Logging format: text, json")

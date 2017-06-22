@@ -14,7 +14,7 @@ TESTS ?= $(shell go list ./... | grep -v /vendor/)
 default: test build
 
 test:
-	go test -v -cover -run=$(RUN) $(TEST)
+	go test -v -cover -run=$(RUN) $(TESTS)
 
 build: clean
 	@go build -v \
