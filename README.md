@@ -5,8 +5,6 @@ telepath
 
 An HTTP endpoint to receive [Influx](https://github.com/influxdata/influxdb) line-protocol metrics destined for [Kafka](http://kafka.apache.org/).
 
-_Note: not ready for production!_
-
 ## example
 
 Build and run Telepath.
@@ -22,6 +20,13 @@ Post a metric in Influx line-protocol.
 curl -i -XPOST http://localhost:8089/write -d 'foo,host=localhost value=1 1468928660000000000'
 ```
 
+Additionally, this project contains a [docker-compose](https://docs.docker.com/compose) file that uses [Telegraf](http://github.com/influxdata/telegraf) and [Jolokia](https://jolokia.org) to send Kafka's own metrics into a Kafka topic.
+
+```
+docker-compose build
+docker-compose up
+```
+
 ## notes
 
-Using [dep](https://github.com/golang/dep) for vendoring.
+We're currently using [dep](https://github.com/golang/dep) for vendoring.
