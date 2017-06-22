@@ -1,6 +1,6 @@
 FROM golang
 
-WORKDIR /go/src/telepath
+WORKDIR /go/src/github.com/Nordstrom/telepath
 COPY . .
 RUN make build
 
