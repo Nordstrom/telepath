@@ -25,9 +25,12 @@ func Auth(h fasthttp.RequestHandler, config *AuthConfig) fasthttp.RequestHandler
 	}
 
 	return fasthttp.RequestHandler(func(ctx *fasthttp.RequestCtx) {
-		username, password := readBasicAuth(ctx)
-
-		if username == config.Username && password == config.Password {
+		if success, attempt := passQuerystringAuth(ctx, config.Username, config.Password); attempt {
+			if success {
+				h(ctx)
+				return
+			}
+		} else if success, _ := passBasicAuth(ctx, config.Username, config.Password); success {
 			h(ctx)
 			return
 		}
@@ -37,15 +40,25 @@ func Auth(h fasthttp.RequestHandler, config *AuthConfig) fasthttp.RequestHandler
 	})
 }
 
-// readBasicAuth returns the username and password provided in the request's
-// Authorization header, if the request uses HTTP Basic Authentication.
-// See RFC 2617, Section 2.
-func readBasicAuth(ctx *fasthttp.RequestCtx) (username, password string) {
+func passQuerystringAuth(ctx *fasthttp.RequestCtx, username, password string) (success, attempt bool) {
+	u := ctx.QueryArgs().Peek("u")
+	p := ctx.QueryArgs().Peek("p")
+	if u == nil {
+		return
+	}
+
+	attempt = true
+	success = string(u) == username && p != nil && string(p) == password
+	return
+}
+
+func passBasicAuth(ctx *fasthttp.RequestCtx, username, password string) (success, attempt bool) {
 	auth := ctx.Request.Header.Peek("Authorization")
 	if !bytes.HasPrefix(auth, basicAuthHeaderPrefix) {
 		return
 	}
 
+	attempt = true
 	payload, err := base64.StdEncoding.DecodeString(string(auth[len(basicAuthHeaderPrefix):]))
 	if err != nil {
 		return
@@ -56,7 +69,6 @@ func readBasicAuth(ctx *fasthttp.RequestCtx) (username, password string) {
 		return
 	}
 
-	username = string(pair[0])
-	password = string(pair[1])
+	success = string(pair[0]) == username && string(pair[1]) == password
 	return
 }

@@ -20,19 +20,52 @@ func Test_auth(t *testing.T) {
 		user          string
 		password      string
 		authorization string
+		querystring   string
 		status        int
 	}{
 		{
-			label:         "authorized",
+			label:         "authorized-with-basic-auth",
 			user:          "joe",
 			password:      "secret",
 			authorization: "Basic am9lOnNlY3JldA==",
 			status:        http.StatusOK,
 		},
 		{
-			label:         "unauthorized",
-			user:          "not",
-			password:      "a chance",
+			label:         "unauthorized-bad-basic-auth",
+			user:          "joe",
+			password:      "secret",
+			authorization: "Basic bm90OmEgY2hhbmNl",
+			status:        http.StatusUnauthorized,
+		},
+		{
+			label:       "authorized-with-querystring",
+			user:        "joe",
+			password:    "secret",
+			querystring: "?u=joe&p=secret",
+			status:      http.StatusOK,
+		},
+		{
+			label:       "unauthorized-with-bad-querystring",
+			user:        "joe",
+			password:    "secret",
+			querystring: "?u=not&p=a+chance",
+			status:      http.StatusUnauthorized,
+		},
+		// If you authenticate with both Basic Authentication and the URL query parameters,
+		// the user credentials specified in the query parameters take precedence.
+		{
+			label:         "authorized-with-querystring-precedence",
+			user:          "joe",
+			password:      "secret",
+			querystring:   "?u=joe&p=secret",
+			authorization: "Basic bm90OmEgY2hhbmNl",
+			status:        http.StatusOK,
+		},
+		{
+			label:         "unauthorized-with-querystring-precedence",
+			user:          "joe",
+			password:      "secret",
+			querystring:   "?u=not&p=a+chance",
 			authorization: "Basic am9lOnNlY3JldA==",
 			status:        http.StatusUnauthorized,
 		},
@@ -47,8 +80,10 @@ func Test_auth(t *testing.T) {
 			var req fasthttp.Request
 			var resp fasthttp.Response
 
-			req.SetRequestURI("http://foo/ok")
-			req.Header.Add("Authorization", c.authorization)
+			req.SetRequestURI("http://foo/ok" + c.querystring)
+			if c.authorization != "" {
+				req.Header.Add("Authorization", c.authorization)
+			}
 			err := client.Do(&req, &resp)
 
 			assert.NoError(t, err)
