@@ -142,6 +142,12 @@ func Test_line_parser_upscaling(t *testing.T) {
 			input:     "foo value=1 1",
 			expect:    "foo value=1 1000000000",
 		},
+		{
+			label:     "handle extra space after timestamp",
+			precision: "s",
+			input:     "foo value=1 1 ",
+			expect:    "foo value=1 1000000000",
+		},
 	}
 
 	for _, c := range cases {

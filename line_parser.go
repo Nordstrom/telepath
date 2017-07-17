@@ -70,7 +70,7 @@ func (lp *lineParser) Next(reader io.Reader) ([]byte, error) {
 		}
 	}
 
-	return convertToNanoseconds(trimNewline(line), lp.precision), nil
+	return convertToNanoseconds(trimSpace(trimNewline(line)), lp.precision), nil
 }
 
 func zeroBuffer(buffer []byte) {
@@ -86,6 +86,14 @@ func parseComplete(err error) bool {
 func trimNewline(line []byte) []byte {
 	length := len(line)
 	if c := line[length-1]; c != '\n' {
+		return line
+	}
+	return line[:length-1]
+}
+
+func trimSpace(line []byte) []byte {
+	length := len(line)
+	if c := line[length-1]; c != ' ' {
 		return line
 	}
 	return line[:length-1]
