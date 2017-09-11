@@ -31,7 +31,7 @@ services:
       driver: none
 
   telegraf:
-    image: quay.io/nordstrom/telegraf:1.3.0-1
+    image: quay.io/nordstrom/telegraf:1.4.0-1
     volumes:
     - ./etc/telegraf.conf:/etc/telegraf/telegraf.conf
     - ./etc/ca.pem:/var/private/ca.pem
@@ -51,14 +51,14 @@ services:
     - "-http.enabled=true"
     - "-https.addr=:8090"
     - "-https.enabled=true"
-    - "-https.certificate=/var/private/telepath.pem"
-    - "-https.key=/var/private/telepath-key.pem"
+    - "-https.certificate=/var/private/server.pem"
+    - "-https.key=/var/private/server-key.pem"
     - "-auth.enabled=true"
     - "-auth.username=writer"
     - "-auth.password=paperback"
     volumes:
     - ./etc/ca.pem:/var/private/ca.pem
-    - ./etc/telepath.pem:/var/private/telepath.pem
-    - ./etc/telepath-key.pem:/var/private/telepath-key.pem
+    - ./etc/server.pem:/var/private/server.pem
+    - ./etc/server-key.pem:/var/private/server-key.pem
     depends_on: [kafka]
 
