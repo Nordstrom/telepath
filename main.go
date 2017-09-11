@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -123,9 +127,50 @@ func serveHTTP(server *fasthttp.Server, config *HTTPConfig, wg *sync.WaitGroup, 
 }
 
 func serveHTTPS(server *fasthttp.Server, config *HTTPSConfig, wg *sync.WaitGroup, doneCh chan bool) {
-	listener, err := net.Listen("tcp4", config.Addr)
+	serverCertificate, err := tls.LoadX509KeyPair(config.CertificatePath, config.KeyPath)
 	if err != nil {
-		log.Fatalf("Could not start %s listener: %v", config.Addr, err)
+		log.Fatalf("Could not load server certificate %s: %v", config.CertificatePath, err)
+	}
+
+	var clientAuth tls.ClientAuthType
+	var clientCertPool *x509.CertPool
+	switch config.ClientVerify {
+	case "optional":
+		clientAuth = tls.RequestClientCert
+		break
+	case "required":
+		clientAuth = tls.RequireAndVerifyClientCert
+		break
+	}
+
+	if clientAuth != tls.NoClientCert {
+		clientCertPool = x509.NewCertPool()
+		for _, certificatePath := range config.ClientCertificatePaths {
+			certBytes, err := ioutil.ReadFile(certificatePath)
+			if err != nil {
+				log.Fatalf("Could not load client certificate %s: %v", certificatePath, err)
+			}
+
+			block, certBytes := pem.Decode(certBytes)
+			clientCertificate, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				log.Fatalf("Could not parse client certificate %s: %v", certificatePath, err)
+			}
+
+			log.Debugf("Adding client certificate %s", certificatePath)
+
+			clientCertPool.AddCert(clientCertificate)
+		}
+	}
+
+	listener, err := tls.Listen("tcp4", config.Addr, &tls.Config{
+		Certificates: []tls.Certificate{serverCertificate},
+		ClientCAs:    clientCertPool,
+		ClientAuth:   clientAuth,
+	})
+
+	if err != nil {
+		log.Fatalf("Could not setup tls config: %v", err)
 	}
 
 	log.Infof("Starting Telepath server: %v", listener.Addr())
@@ -133,7 +178,7 @@ func serveHTTPS(server *fasthttp.Server, config *HTTPSConfig, wg *sync.WaitGroup
 		wg.Add(1)
 		defer wg.Done()
 
-		if err := server.ServeTLS(listener, config.CertificatePath, config.KeyPath); err != nil {
+		if err := server.Serve(listener); err != nil {
 			log.Fatalf("Unexpected error: %v", err)
 		}
 
