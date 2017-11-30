@@ -41,10 +41,10 @@ type stringSlice []string
 
 func (c *TelepathConfig) Parse() {
 	var clientCertificatePaths stringSlice
-	version := flag.String("version", DEFAULT_KAFKA_VERSION, "Kafka version, will default to " + DEFAULT_KAFKA_VERSION)
+	version := flag.String("kafka.version", DEFAULT_KAFKA_VERSION, "Kafka version, will default to " + DEFAULT_KAFKA_VERSION)
 	c.Version = StringToKafkaVersion(version)
 
-	flag.StringVar(&c.Brokers, "brokers", "", "A comma-separated list of Kafka host:port addrs to connect to")
+	flag.StringVar(&c.Brokers, "kafka.brokers", "", "A comma-separated list of Kafka host:port addrs to connect to")
 	flag.StringVar(&c.TopicTemplate, "topic.name", DefaultTopicTemplate, "The Kafka topic name/template to write metrics to")
 
 	flag.StringVar(&c.HTTP.Addr, "http.addr", ":8089", "An HTTP addr to bind to")
