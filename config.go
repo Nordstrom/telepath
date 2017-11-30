@@ -6,7 +6,11 @@ import (
 
 	"github.com/Nordstrom/telepath/middleware"
 	log "github.com/Sirupsen/logrus"
+	"github.com/Shopify/sarama"
+	"strings"
 )
+
+const DEFAULT_KAFKA_VERSION = "V0_10_0_0"
 
 type TelepathConfig struct {
 	Brokers       string
@@ -16,6 +20,7 @@ type TelepathConfig struct {
 	HTTP          HTTPConfig
 	HTTPS         HTTPSConfig
 	Auth          middleware.AuthConfig
+	Version 	  sarama.KafkaVersion
 }
 
 type HTTPConfig struct {
@@ -36,6 +41,8 @@ type stringSlice []string
 
 func (c *TelepathConfig) Parse() {
 	var clientCertificatePaths stringSlice
+	version := flag.String("version", DEFAULT_KAFKA_VERSION, "Kafka version, will default to " + DEFAULT_KAFKA_VERSION)
+	c.Version = StringToKafkaVersion(version)
 
 	flag.StringVar(&c.Brokers, "brokers", "", "A comma-separated list of Kafka host:port addrs to connect to")
 	flag.StringVar(&c.TopicTemplate, "topic.name", DefaultTopicTemplate, "The Kafka topic name/template to write metrics to")
@@ -63,6 +70,22 @@ func (c *TelepathConfig) Parse() {
 
 	SetLogFormat(c.LogFormat)
 	SetLogLevel(c.LogLevel)
+}
+
+func StringToKafkaVersion(version *string) sarama.KafkaVersion {
+	switch strings.ToLower(*version) {
+		case "v0_11_0_0": return sarama.V0_11_0_0
+		case "v0_10_2_0": return sarama.V0_10_2_0
+		case "v0_10_1_0": return sarama.V0_10_1_0
+		case "v0_10_0_1": return sarama.V0_10_0_1
+		case "v0_10_0_0": return sarama.V0_10_0_0
+		case "v0_9_0_1": return sarama.V0_9_0_1
+		case "v0_9_0_0": return sarama.V0_9_0_0
+		case "v0_8_2_2": return sarama.V0_8_2_2
+		case "v0_8_2_1": return sarama.V0_8_2_1
+		case "v0_8_2_0": return sarama.V0_8_2_0
+		default: return sarama.V0_10_0_0
+	}
 }
 
 func (ss *stringSlice) String() string {

@@ -28,7 +28,7 @@ func main() {
 		log.Fatal("Please specify at least one Kafka broker")
 	}
 
-	kafkaClient, err := newKafkaClient(strings.Split(config.Brokers, ","), time.Minute)
+	kafkaClient, err := newKafkaClient(strings.Split(config.Brokers, ","), time.Minute, config.Version)
 	if err != nil {
 		log.Fatalf("Could not connect to Kafka brokers: %v", err)
 	}
@@ -81,13 +81,14 @@ func main() {
 	wg.Wait()
 }
 
-func newKafkaClient(brokers []string, timeout time.Duration) (client sarama.Client, err error) {
+func newKafkaClient(brokers []string, timeout time.Duration, version sarama.KafkaVersion) (client sarama.Client, err error) {
 	config := sarama.NewConfig()
 
 	config.Producer.RequiredAcks = sarama.WaitForLocal       // Only wait for the leader to ack
 	config.Producer.Compression = sarama.CompressionSnappy   // Compress messages
 	config.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
 	config.Producer.Return.Successes = true
+	config.Version = version
 
 	retryTimeout := time.Duration(10 * time.Second)
 	for {
