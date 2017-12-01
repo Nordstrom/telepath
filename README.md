@@ -11,7 +11,7 @@ Build and run Telepath.
 
 ```
 make
-bin/telepath -broker=localhost:9092 -version=V0_11_0_0
+bin/telepath -kafka.broker=localhost:9092
 ```
 
 Post a metric in Influx line-protocol.
@@ -29,5 +29,5 @@ docker-compose up
 
 ## notes
 
-We're currently using [dep](https://github.com/golang/dep) for vendoring.
-Will default to kafka V0_10_0_0
+- We're currently using [dep](https://github.com/golang/dep) for vendoring.
+- The default Kafka Producer behavior is based on [Sarama version](https://godoc.org/github.com/Shopify/sarama#pkg-variables) ` V0_10_0_0`
